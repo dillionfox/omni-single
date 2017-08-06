@@ -93,6 +93,16 @@ calculations:
     slice_name: current
     group: all
     collections: all
+  instant_interface:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      selector:
+        selection_key: "resname POPC"
+        grid_spacing: 0.5
 variables:
   #---protected
   art_director: art_ocean.py
