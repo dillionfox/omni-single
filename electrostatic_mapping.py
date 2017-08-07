@@ -6,12 +6,16 @@ import MDAnalysis
 import time
 
 selection_key = "resname POPC"
-DCD = "membrane_example/sample.dcd"
-PSF = "membrane_example/sample.psf"
+trajfile = "membrane_example/sample.dcd"
+grofile = "membrane_example/sample.psf"
 II_traj = "membrane_example/II_0.pdb"
 
 global scale
 scale = 1.0
+
+# still need to:	 
+#	test on more cases and 
+#	import all possible water resnames
 
 def electrostatic_mapping((grofile,trajfile,**kwargs):
 
@@ -25,13 +29,18 @@ def electrostatic_mapping((grofile,trajfile,**kwargs):
 	sn = kwargs['sn']
 	work = kwargs['workspace']
 
-	global selection_key
+	global water_resname
 
-	if 'selection_key' in kwargs['calc']['specs']['selector']:
-		selection_key = kwargs['calc']['specs']['selector']['selection_key']
+	if 'water_resname' in kwargs['calc']['specs']['selector']:
+		water_resname = kwargs['calc']['specs']['selector']['water_resname']
 	else: 
-		print 'need to provide selection key in yaml file'
-		exit()
+		print 'need to provide resname of water in yaml file. this is a quick fix'
+		return 0
+	print 'this code is currently only set up for TIP3P water. If you are using a different', \
+		'water model, you need to update the vector called (chg) that stores the charges'
+
+	II_traj = kwargs['upstream']['instant_interface']['interface_coors']	
+
 	if 'writepdb' in kwargs['calc']['specs']:
 		writepdb = 'y'
 	else: writepdb = 'n'
@@ -61,14 +70,14 @@ def electrostatic_mapping((grofile,trajfile,**kwargs):
 		outfile.close()
 		return 0
 	
-	def extract_traj_info(PSF,DCD,selection_key):
+	def extract_traj_info(grofile,trajfile,selection_key):
 	        print 'loading...'
 	        # load some variables into global namespace
 	        global n_heavy_atoms
 	        global pbc
 		global box_shift
 	
-	        uni = MDAnalysis.Universe(PSF,DCD)
+	        uni = MDAnalysis.Universe(grofile,trajfile)
 	        nframes = len(uni.trajectory)					# number of frames
 		box_shift = np.zeros((nframes,3))
 	
@@ -78,7 +87,7 @@ def electrostatic_mapping((grofile,trajfile,**kwargs):
 	        n_heavy_atoms = len(heavy_atoms.atoms)                          # number of heavy protein atoms
 	        positions = np.zeros((nframes,n_heavy_atoms,3))
 	
-	        water = uni.select_atoms("resname TIP3")			# identify atoms to build interface around
+	        water = uni.select_atoms(water_resname)				# identify atoms to build interface around
 	        water_indices = water.indices 
 	        n_water = len(water.atoms)					# number of heavy protein atoms
 	        water_pos = np.zeros((nframes,n_water,3))
@@ -93,7 +102,7 @@ def electrostatic_mapping((grofile,trajfile,**kwargs):
 	        	heavy_atoms = protein.select_atoms('not name H*')	# Only need to consider heavy atoms
 			positions[fr] = heavy_atoms.positions/scale
 	
-	        	water = uni.select_atoms("resname TIP3")		# identify atoms to build interface around
+	        	water = uni.select_atoms(water_resname)			# identify atoms to build interface around
 			water_pos[fr] = water.positions/scale
 	
 	        pbc = uni.dimensions[0:3]/scale					# retrieve periodic bounds
@@ -188,7 +197,7 @@ def electrostatic_mapping((grofile,trajfile,**kwargs):
 		return LREP 
 	
 		time1 =time.time()
-		[nframes, positions,water] = extract_traj_info(PSF,DCD,selection_key)
+		[nframes, positions,water] = extract_traj_info(grofile,trajfile,selection_key)
 		[II_coor,nframes_ii] = read_ii_coor(II_traj)
 		time2 =time.time()
 		print 'data loaded. computing potential... time:', time2-time1
@@ -213,5 +222,5 @@ def electrostatic_mapping((grofile,trajfile,**kwargs):
 	
 	#---pack
 	attrs,result = {},{}
-	result['interface_coors'] = array(scaled_coors) # contacts has to be a numpy array
+	result['electrostatic_map'] = array(LREP) # contacts has to be a numpy array
 	return result,attrs	

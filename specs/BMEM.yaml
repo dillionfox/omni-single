@@ -103,6 +103,15 @@ calculations:
       selector:
         selection_key: "resname POPC"
         grid_spacing: 0.5
+  electrostatic_mapping:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      water_resname: "resname TIP3"
+    upstream: instant_interface
 variables:
   #---protected
   art_director: art_ocean.py
