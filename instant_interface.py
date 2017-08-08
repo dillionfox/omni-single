@@ -44,6 +44,7 @@ def extract_traj_info(grofile,trajfile,selection_key):
 	# load some variables into global namespace
 	global n_heavy_atoms
 	global pbc
+	global box_shift
 
         uni = MDAnalysis.Universe(grofile,trajfile)
 	sel = uni.select_atoms('all')
@@ -150,9 +151,7 @@ def GridInterp(grid1, grid2, value1, value2, rhoc):
 		return grid1
 	
 	mu = (rhoc - value1) / (value2 - value1)
-	gridc[0] =  grid1[0] + mu * (grid2[0] - grid1[0])
-	gridc[1] =  grid1[1] + mu * (grid2[1] - grid1[1])
-	gridc[2] =  grid1[2] + mu * (grid2[2] - grid1[2])
+	gridc = grid1 + mu*(grid2 - grid1)
 	
 	return gridc
 
@@ -500,47 +499,24 @@ def MC_table(gridv, gridp, rhoc, trip):
 
 	return [ntri, trip]
 
-def vertex_loop(ii):
-	epsilon = 0.000001
-	vertexflag = 0
-	vertexdist = 0.0
-	vertexdist += (trip[nt][qi][0] - ii_coor[ii][0]) * (trip[nt][qi][0] - ii_coor[ii][0])
-	vertexdist += (trip[nt][qi][1] - ii_coor[ii][1]) * (trip[nt][qi][1] - ii_coor[ii][1])
-	vertexdist += (trip[nt][qi][2] - ii_coor[ii][2]) * (trip[nt][qi][2] - ii_coor[ii][2])
-	if vertexdist < epsilon:
-		vertexflag = 1
-	return vertexflag
-
 def marching_cubes(rho,pos): 
 	print "---> running marching cubes. this might take a while..."
-	# load some more variables into global namespace
-	#global ii_coor
-	#global trip
-	#global II
-
-	global trip
-	global ii_coor
-	global nt
-	global qi
-
-	II = 2500
+	II = 500
 	epsilon = 0.000001
 	rhoc = 0.1
 	gridv = np.zeros(8)
 	gridp = np.zeros((8,3))
-	cube_coor = np.zeros(3)
 	trip = np.zeros((5,3,3))
 	ii_coor = np.zeros((II,3))
 
 	for i in range(n_grid_pts[0]):
-		start_1 = time.time()
 		for j in range(n_grid_pts[1]):
 			for k in range(n_grid_pts[2]):
-				i1 = i + 1
-				j1 = j + 1
-				k1 = k + 1
+				i1 = i + 1; 
 				if i1 >= n_grid_pts[0]: i1 -= n_grid_pts[0]
+				j1 = j + 1; 
 				if j1 >= n_grid_pts[1]: j1 -= n_grid_pts[1]
+				k1 = k + 1; 
 				if k1 >= n_grid_pts[2]: k1 -= n_grid_pts[2]
 				
 				# gridv contains the rho values at the 8 neighboring voxels
@@ -553,83 +529,42 @@ def marching_cubes(rho,pos):
 				gridv[6] = rho[i1][j1][k1]
 				gridv[7] = rho[i1][j][k1]
 				
-				# find if the cube is inside bubble, and whether it is near a heavy atom
-				cubefactor = 0
-				for v in range(8):
-					if gridv[v] <= rhoc:
-						cubefactor+=1
-
-				# if next to heavy atom
-				if cubefactor >=4:
-					cube_coor[0] = (i+0.5) * grid_spacing[0]
-					cube_coor[1] = (j+0.5) * grid_spacing[1]
-					cube_coor[2] = (k+0.5) * grid_spacing[2]
-
-				gridp[0][0] = i*grid_spacing[0]
-				gridp[0][1] = j*grid_spacing[1]
-				gridp[0][2] = k*grid_spacing[2]
-				
-				gridp[1][0] = i*grid_spacing[0]
-				gridp[1][1] = (j+1)*grid_spacing[1]
-				gridp[1][2] = k*grid_spacing[2]
-				
-				gridp[2][0] = (i+1)*grid_spacing[0]
-				gridp[2][1] = (j+1)*grid_spacing[1]
-				gridp[2][2] = k*grid_spacing[2]
-				
-				gridp[3][0] = (i+1)*grid_spacing[0]
-				gridp[3][1] = j*grid_spacing[1]
-				gridp[3][2] = k*grid_spacing[2]
-				
-				gridp[4][0] = i*grid_spacing[0]
-				gridp[4][1] = j*grid_spacing[1]
-				gridp[4][2] = (k+1)*grid_spacing[2]
-				
-				gridp[5][0] = i*grid_spacing[0]
-				gridp[5][1] = (j+1)*grid_spacing[1]
-				gridp[5][2] = (k+1)*grid_spacing[2]
-				
-				gridp[6][0] = (i+1)*grid_spacing[0]
-				gridp[6][1] = (j+1)*grid_spacing[1]
-				gridp[6][2] = (k+1)*grid_spacing[2]
-				
-				gridp[7][0] = (i+1)*grid_spacing[0]
-				gridp[7][1] = j*grid_spacing[1]
-				gridp[7][2] = (k+1)*grid_spacing[2]
+				gridp[0] = np.einsum('i,i->i',[i,j,k],grid_spacing)
+				gridp[1] = np.einsum('i,i->i',[i,j+1,k],grid_spacing)
+				gridp[2] = np.einsum('i,i->i',[i+1,j+1,k],grid_spacing)
+				gridp[3] = np.einsum('i,i->i',[i+1,j,k],grid_spacing)
+				gridp[4] = np.einsum('i,i->i',[i,j,k+1],grid_spacing)
+				gridp[5] = np.einsum('i,i->i',[i,j+1,k+1],grid_spacing)
+				gridp[6] = np.einsum('i,i->i',[i+1,j+1,k+1],grid_spacing)
+				gridp[7] = np.einsum('i,i->i',[i+1,j,k+1],grid_spacing)
 
 				[ntri,trip] = MC_table(gridv, gridp, rhoc, trip)
 
 				for nt in range(ntri):
-					for qi in range(3):			# notation for generalized coordinate, in case youre curious
-						### PARALLELIZE THIS 
-						#vertexflag = Parallel(n_jobs=8)(delayed(vertex_loop,has_shareable_memory)(ii      ) for ii       in range(II))
-						#VRS =        Parallel(n_jobs=8)(delayed(compute_VRS,has_shareable_memory)(ii_point) for ii_point in range(II)) 
+					for qi in range(3):
 						vertexflag = 0
+						start_2 = time.time()
 						for ii in range(II):
-							vertexdist = 0.0
-							vertexdist += (trip[nt][qi][0] - ii_coor[ii][0]) * (trip[nt][qi][0] - ii_coor[ii][0])
-							vertexdist += (trip[nt][qi][1] - ii_coor[ii][1]) * (trip[nt][qi][1] - ii_coor[ii][1])
-							vertexdist += (trip[nt][qi][2] - ii_coor[ii][2]) * (trip[nt][qi][2] - ii_coor[ii][2])
+							vertexdist = np.dot(trip[nt][qi]-ii_coor[ii],trip[nt][qi]-ii_coor[ii])
 							if vertexdist < epsilon:
 								vertexflag = 1
 								break
+						stop_2 = time.time()
+						if stop_2-start_2 > 20:
+							print "time:", stop_2-start_2, ", number of interface points:", II
 						if vertexflag == 0:
-							ii_coor = np.vstack((ii_coor, np.zeros(3)))
-							ii_coor[II][0] = trip[nt][qi][0]
-							ii_coor[II][1] = trip[nt][qi][1]
-							ii_coor[II][2] = trip[nt][qi][2]
+							ii_coor = np.vstack((ii_coor,np.zeros(3)))
+							ii_coor[II] = trip[nt][qi]
 							II+=1
-						elif vertexflag == 1:
-							break
-		stop_1 = time.time()
-		print i, "/", n_grid_pts[0]
+		print i+1, "/", n_grid_pts[0]
 	return ii_coor
 
 
 ##### start instant_interface() code #####	
 
-# load some variables into the global namespace	
 def instant_interface(grofile,trajfile,**kwargs):
+
+	global work
 	
 	#---unpack
 	sn = kwargs['sn']
@@ -655,34 +590,37 @@ def instant_interface(grofile,trajfile,**kwargs):
 
 	scale = 10.0
 	[nframes, positions] = extract_traj_info(grofile,trajfile,selection_key)
-	# defines global variables: n_heavy_atoms, pbc
-	interface_coors = []
-	
+	nframes = 1
+	all_coors = []
+
 	for fr in range(nframes):
 	
 		print 'working on frame', fr+1, ' of', nframes
 		pos=positions[fr] 
-	
 		coarse_grain_start = time.time()
 		rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
 		
 		coarse_grain_stop = time.time()
 		print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
-	
 		marching_cubes_start = time.time()
 		interface_coors = marching_cubes(rho,pos) # defines global variables: cube_coor
-		
 		marching_cubes_stop = time.time()
 		print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
-	
 		scaled_coors = [[j*scale for j in i] for i in interface_coors]
+
 		if writepdb:
 			write_pdb(scaled_coors,fr)
-		interface_coors.append(scaled_coors)
+
+		#if fr == 0:
+		#	all_coors = np.zeros((nframes,len(scaled_coors),3))
+
+		all_coors.append(scaled_coors)
+		scaled_coors = []
 	
 		print 'total elapsed time:', marching_cubes_stop-coarse_grain_start
 	
+	exit()
 	#---pack
-	attrs,result = {},{}
-	result['interface_coors'] = array(interface_coors) # contacts has to be a numpy array
-	return result,attrs	
+	#attrs,result = {},{}
+	#result['interface_coors'] = np.array(all_coors) # contacts has to be a numpy array
+	#return result,attrs	
