@@ -70,9 +70,10 @@ def extract_traj_info(PSF,DCD,selection_key):
 
         for fr in range(nframes):                                       # save coordinates for each frame
                 uni.trajectory[fr]
+        	pbc = uni.dimensions[0:3]				# retrieve periodic bounds
         	sel = uni.select_atoms('all')
-		box_shift[fr] = -sel.atoms.center_of_mass()
-        	sel.atoms.translate(box_shift[fr])				# center selection
+		box_shift[fr] = -sel.atoms.center_of_mass()+pbc/2.0	# first center at origin, then put vertx of quadrant 7 at origin
+        	sel.atoms.translate(box_shift[fr])			# center selection
 
         	protein = uni.select_atoms(selection_key)		# identify atoms to build interface around
         	heavy_atoms = protein.select_atoms('not name H*')	# Only need to consider heavy atoms
@@ -131,14 +132,11 @@ def compute_coarse_grain_density(pos):
 	sigp = 0.24 							# width of Gaussian smoothing: protein
 	phi_bar_p = [phi(i*dl, sigp, cutoff) for i in range(npoints*2)]	# coarse grain density
 
-	#dL = 0.2							# target spacing. This will be adjusted
 	Ninc = int(cutoff/dL)						# ~!~~~still not sure what this is~~~!~
 
 	# define voxels
 	n_grid_pts = [int(p/dL) for p in pbc]				# number of bins that naturally fit along each axis
 	grid_spacing =  [pbc[i]/n_grid_pts[i] for i in range(len(pbc))]	# distance between grid points for each direction
-					# i.e. pbc_x = 1.05, dL = 0.1. then n_grid_pts[0] = int(1.05/0.1) = int(10.5) = 10
-					# and grid_spacing = 1.05/10 = 0.105
 	rho = np.zeros((n_grid_pts[0],n_grid_pts[1],n_grid_pts[2]))	# dummy arrays store coarse grain density
 
 	for i in range(n_heavy_atoms):
@@ -517,7 +515,7 @@ def MC_table(gridv, gridp, rhoc, trip):
 
 	return [ntri, trip]
 
-def marching_cubes(rho,pos): 
+def marching_cubes(rho): 
 	print "---> running marching cubes. this might take a while..."
 	# load some more variables into global namespace
 
@@ -591,7 +589,7 @@ def marching_cubes(rho,pos):
 	return ii_coor
 
 #--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
-def compute_VRS(ii_point):
+def compute_VRS(ii_point,water_coor):
 	def erf(x):
 		sign = 1 if x >= 0 else -1
 		x = abs(x)
@@ -617,7 +615,7 @@ def compute_VRS(ii_point):
 			vrs += chg[j] * erf(r/sigma) / (r)
 	return vrs*SI_unit_conv
 
-def compute_refVal():
+def compute_refVal(water_coor):
 	def erf(x):
 		sign = 1 if x >= 0 else -1
 		x = abs(x)
@@ -641,7 +639,7 @@ def compute_refVal():
 def scale_potential(ii):
 	return VRS[ii]-refVal
 
-def compute_LREP(positions,ii_coor,water_coor):
+def compute_LREP(ii_coor,water_coor):
 
 	global VRS
 	global chg
@@ -658,14 +656,52 @@ def compute_LREP(positions,ii_coor,water_coor):
 
 	n_water = water_coor.shape[0]
 	print 'starting parallel job...'
-	VRS = Parallel(n_jobs=8)(delayed(compute_VRS,has_shareable_memory)(ii_point) for ii_point in range(II)) 
+	### Parallel option: VRS = Parallel(n_jobs=8)(delayed(compute_VRS,has_shareable_memory)(ii_point) for ii_point in range(II)) 
+	for ii in range(II):
+		VRS = compute_VRS(ii)
 
 	global refVal
-	refVal = compute_refVal()
+	refVal = compute_refVal(water_coor)
 
-	LREP = Parallel(n_jobs=8)(delayed(scale_potential,has_shareable_memory)(ii) for ii in range(II))
+	### Parallel option: LREP = Parallel(n_jobs=8)(delayed(scale_potential,has_shareable_memory)(ii) for ii in range(II))
+	for ii in range(II):
+		LREP = scale_potential(ii)
 	return LREP 
 
+def run_emaps(fr):
+	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
+	global box_shift
+	global scale
+	global positions
+	global water
+	global nframes
+
+	#--- EXTRACT INFO FOR FRAME, FR
+	print 'working on frame', fr+1, ' of', nframes
+	pos=positions[fr] 
+	water_coor = water[fr]
+	
+	#--- COMPUTE RHO
+	coarse_grain_start = time.time()
+	rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
+	coarse_grain_stop = time.time()
+	print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
+	
+	#--- MARCHING CUBES
+	marching_cubes_start = time.time()
+	interface_coors = marching_cubes(rho) # defines global variables: cube_coor
+	marching_cubes_stop = time.time()
+	print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
+	
+	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
+	LREP_start = time.time()
+	LREP = compute_LREP(ii_coor,water_coor)
+	LREP_stop = time.time()
+	ii_coor *= scale
+	print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
+	write_pdb(ii_coor,LREP,fr)
+	return 0
+	
 def electrostatic_map(grofile,trajfile,**kwargs):
 	
 	#--- UNPACK UPSTREAM DATA
@@ -691,46 +727,50 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	#--- LOAD VARIABLES INTO GLOBAL NAMESPACE
 	global box_shift
 	global scale
-	global pos
-	global rho
-	global water_coor
-	global ii_coor
+	global positions
+	global water
+	global nframes
 	scale = 10.0
 
 	#--- READ DATA
 	[nframes, positions, water] = extract_traj_info(grofile,trajfile,selection_key)
 			# defines global variables: n_heavy_atoms, pbc
-	
+
 	#--- LOOP THROUGH FRAMES IN TRAJECTORY
-	for fr in range(nframes):
-	
-		#--- EXTRACT INFO FOR FRAME, FR
-		print 'working on frame', fr+1, ' of', nframes
-		pos=positions[fr] 
-		water_coor = water[fr]
-	
-		#--- COMPUTE RHO
-		coarse_grain_start = time.time()
-		rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
-		coarse_grain_stop = time.time()
-		print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
-	
-		#--- MARCHING CUBES
-		marching_cubes_start = time.time()
-		interface_coors = marching_cubes(rho,pos) # defines global variables: cube_coor
-		ii_coor_scaled = [[j*scale for j in i] for i in interface_coors]
-		ii_coor = [q-box_shift[fr] for q in ii_coor_scaled]
-		marching_cubes_stop = time.time()
-		print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
-	
-		##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
-		LREP = compute_LREP(pos, ii_coor,water_coor)
-		print 'potential calculation completed. db...'
-		write_pdb(ii_coor,LREP,fr)
+	frames = range(nframes)
+	check = Parallel(n_jobs=8)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
+	#for fr in range(nframes):
+	#
+	#	#--- EXTRACT INFO FOR FRAME, FR
+	#	print 'working on frame', fr+1, ' of', nframes
+	#	pos=positions[fr] 
+	#	water_coor = water[fr]
+	#
+	#	#--- COMPUTE RHO
+	#	coarse_grain_start = time.time()
+	#	rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
+	#	coarse_grain_stop = time.time()
+	#	print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
+	#
+	#	#--- MARCHING CUBES
+	#	marching_cubes_start = time.time()
+	#	interface_coors = marching_cubes(rho) # defines global variables: cube_coor
+	#	ii_coor_scaled = [[j*scale for j in i] for i in interface_coors]
+	#	ii_coor = [q-box_shift[fr] for q in ii_coor_scaled]
+	#	marching_cubes_stop = time.time()
+	#	print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
+	#
+	#	#--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
+	#	LREP = compute_LREP(ii_coor,water_coor)
+	#	print 'potential calculation completed. db...'
+	#	write_pdb(ii_coor,LREP,fr)
 	
 	#--- PACK UP RESULTS AND SEND BACK TO OMNICALC
-	attrs,result = {},{}
-	result['done'] = np.array(['y']) # data has to be a numpy array
-	return result,attrs	
-
+	if check == 0:
+		attrs,result = {},{}
+		result['done'] = np.array(['y']) # data has to be a numpy array
+		return result,attrs	
+	else:
+		print "something went wrong..."
+		return 0
 
