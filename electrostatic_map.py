@@ -11,13 +11,26 @@ ELECTROSTATIC MAPPING
 WILLARD-CHANDLER INSTANTANEOUS INTERFACE
 Computes the instantaneous interface between liquid-liquid boundaries
 !! still in testing phase !!
+
+OUTPUT: pdb file for each frame containing instantaneous interface points. The beta value
+for each point represents the strength of the long range electrostatic potential. Right now
+the units are messed up (off by a factor of either 10 or 1/10). 
+
+Remsing and Weeks recommend averaging the electrostatic potential over many frames. This code is not
+currently set up to do this, but it is on the list of things to do
+
+There doesn't seem to be a point in returning all of this data back to omnicalc,
+so right now I'm just having it return 'y' so omnicalc knows it can skip this
+if the calculation has already been performed successfully.
 """
 
+"""
+TODO:
+	- set up the code so averages can be computed
+	- figure out if it makes sense to return more data to omnicalc (such as rho)
+	- ?
 
-#selection_key = "resname GOL"
-#DCD = "/home/dillion/research/HRF/ABF/electrostatic_mapping/GOL_GOL-TRG_7_sample.dcd"
-#PSF = "/home/dillion/research/HRF/ABF/electrostatic_mapping/solvate.psf"
-#dL = 0.1
+"""
 
 #--- WRITE OUTPUT
 def write_pdb(coor,beta,fr):
