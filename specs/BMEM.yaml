@@ -122,7 +122,8 @@ calculations:
               - 2.5
               - 1.0
         curvature_sum: mean
-  instant_interface:
+  #instant_interface:
+  electrostatic_map:
     uptype: simulation
     slice_name: current
     group: all

@@ -1,75 +1,90 @@
-#!/usr/bin/python
 from __future__ import division
-import time
 import numpy as np
-import MDAnalysis
-from joblib import Parallel,delayed
+from joblib import Parallel, delayed
 from joblib.pool import has_shareable_memory
-
+import time
+import MDAnalysis
 
 """
+ELECTROSTATIC MAPPING
+
 WILLARD-CHANDLER INSTANTANEOUS INTERFACE
 Computes the instantaneous interface between liquid-liquid boundaries
 !! still in testing phase !!
 """
 
-def write_pdb(data,fr):
+
+#selection_key = "resname GOL"
+#DCD = "/home/dillion/research/HRF/ABF/electrostatic_mapping/GOL_GOL-TRG_7_sample.dcd"
+#PSF = "/home/dillion/research/HRF/ABF/electrostatic_mapping/solvate.psf"
+#dL = 0.1
+
+#--- WRITE OUTPUT
+def write_pdb(coor,beta,fr):
 	print 'writing pdb...'
-	#outfile = open("II_"+str(fr)+".pdb","w")
-	outfile = open(work.postdir+'instant_interface_frame_'+str(fr)+'.pdb',"w")
+	outfile = open("emap_"+str(fr)+".pdb","w")
 	count_zeros = 0
-	for i in range(len(data)):
-		if (data[i][0]!=0 and data[i][1]!=0 and data[i][2]!=0):
-			t1 = "ATOM"		# ATOM
-			t2 = 1			# INDEX
-			t3 = "C"		# ATOM NAME
-			t4 = ""			# ALTERNATE LOCATION INDICATOR
-			t5 = "AAA"		# RESIDUE NAME
-			t6 = "X"		# CHAIN
-			t7 = 0			# RESIDUE NUMBER
-			t8 = ""			# INSERTION CODE
-			t9 = float(data[i][0])	# X
-			t10 = float(data[i][1])	# Y
-			t11 = float(data[i][2])	# Z
-			t12 = 0.0		# OCCUPANCY
-			t13 = 0.0		# TEMPERATURE FACTOR
-			t14 = ""		# ELEMENT SYMBOL
-			t15 = ""		# CHARGE ON ATOM
+	for i in range(len(coor)):
+		if (coor[i][0]!=0 and coor[i][1]!=0 and coor[i][2]!=0):
+			t1 = "ATOM"					# ATOM
+			t2 = 1						# INDEX
+			t3 = "C"					# ATOM NAME
+			t4 = ""						# ALTERNATE LOCATION INDICATOR
+			t5 = "AAA"					# RESIDUE NAME
+			t6 = "X"					# CHAIN
+			t7 = 0						# RESIDUE NUMBER
+			t8 = ""						# INSERTION CODE
+			t9 = float(coor[i][0])				# X
+			t10 = float(coor[i][1])				# Y
+			t11 = float(coor[i][2])				# Z
+			t12 = 0.0					# OCCUPANCY
+			t13 = beta[i]					# TEMPERATURE FACTOR
+			t14 = ""					# ELEMENT SYMBOL
+			t15 = ""					# CHARGE ON ATOM
 			outfile.write("{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}{:2s}\n".format(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10,t11,t12,t13,t14,t15))
 	outfile.close()
 	return 0
 
-def extract_traj_info(grofile,trajfile,selection_key):
-	print 'loading...'
-	# load some variables into global namespace
-	global n_heavy_atoms
-	global pbc
+#--- EXTRACT COORDINATES
+def extract_traj_info(PSF,DCD,selection_key):
+        print 'loading...'
+        # load some variables into global namespace
+        global n_heavy_atoms
+        global pbc
 	global box_shift
 
-        uni = MDAnalysis.Universe(grofile,trajfile)
-	sel = uni.select_atoms('all')
-	sel.atoms.translate(-sel.atoms.center_of_mass())		# center selection
-
-	nframes = len(uni.trajectory) 					# number of frames
-	protein = uni.select_atoms(selection_key) 			# identify atoms to build interface around
-	heavy_atoms = protein.select_atoms('not name H*')		# Only need to consider heavy atoms
-	n_heavy_atoms = len(heavy_atoms.atoms)				# number of heavy protein atoms
-	positions = np.zeros((nframes,n_heavy_atoms,3))
+        uni = MDAnalysis.Universe(PSF,DCD)
+        nframes = len(uni.trajectory)					# number of frames
 	box_shift = np.zeros((nframes,3))
 
-	for fr in range(nframes):					# save coordinates for each frame
-		uni.trajectory[fr]
+        protein = uni.select_atoms(selection_key)			# identify atoms to build interface around
+        heavy_atoms = protein.select_atoms('not name H*')		# Only need to consider heavy atoms
+        protein_indices = heavy_atoms.indices 
+        n_heavy_atoms = len(heavy_atoms.atoms)                          # number of heavy protein atoms
+        positions = np.zeros((nframes,n_heavy_atoms,3))
+
+        water = uni.select_atoms("resname TIP3")			# identify atoms to build interface around
+        water_indices = water.indices 
+        n_water = len(water.atoms)					# number of heavy protein atoms
+        water_pos = np.zeros((nframes,n_water,3))
+
+        for fr in range(nframes):                                       # save coordinates for each frame
+                uni.trajectory[fr]
         	sel = uni.select_atoms('all')
-        	box_shift[fr] = -sel.atoms.center_of_mass()
-        	sel.atoms.translate(box_shift[fr])                          # center selection
+		box_shift[fr] = -sel.atoms.center_of_mass()
+        	sel.atoms.translate(box_shift[fr])				# center selection
 
-        	protein = uni.select_atoms(selection_key)               # identify atoms to build interface around
-        	heavy_atoms = protein.select_atoms('not name H*')       # Only need to consider heavy atoms
-        	positions[fr] = heavy_atoms.positions/scale
+        	protein = uni.select_atoms(selection_key)		# identify atoms to build interface around
+        	heavy_atoms = protein.select_atoms('not name H*')	# Only need to consider heavy atoms
+		positions[fr] = heavy_atoms.positions/scale
 
-	pbc = uni.dimensions[0:3]/scale					# retrieve periodic bounds
-	return [nframes,positions]
+        	water = uni.select_atoms("resname TIP3")		# identify atoms to build interface around
+		water_pos[fr] = water.positions/scale
 
+        pbc = uni.dimensions[0:3]/scale					# retrieve periodic bounds
+        return [nframes,positions,water_pos]
+
+#--- FUNCTIONS FOR COMPUTING RHO
 def erf(x):
 	sign = 1 if x >= 0 else -1
 	x = abs(x)
@@ -116,7 +131,7 @@ def compute_coarse_grain_density(pos):
 	sigp = 0.24 							# width of Gaussian smoothing: protein
 	phi_bar_p = [phi(i*dl, sigp, cutoff) for i in range(npoints*2)]	# coarse grain density
 
-	#dL = 0.1							# target spacing. This will be adjusted
+	#dL = 0.2							# target spacing. This will be adjusted
 	Ninc = int(cutoff/dL)						# ~!~~~still not sure what this is~~~!~
 
 	# define voxels
@@ -139,6 +154,7 @@ def compute_coarse_grain_density(pos):
 
 	return rho
 
+#--- FUNCTIONS FOR COMPUTING MARCHING CUBES
 def GridInterp(grid1, grid2, value1, value2, rhoc):
 	gridc = np.zeros(3)
 	epsilon = 0.000001 
@@ -151,7 +167,9 @@ def GridInterp(grid1, grid2, value1, value2, rhoc):
 		return grid1
 	
 	mu = (rhoc - value1) / (value2 - value1)
-	gridc = grid1 + mu*(grid2 - grid1)
+	gridc[0] =  grid1[0] + mu * (grid2[0] - grid1[0])
+	gridc[1] =  grid1[1] + mu * (grid2[1] - grid1[1])
+	gridc[2] =  grid1[2] + mu * (grid2[2] - grid1[2])
 	
 	return gridc
 
@@ -499,108 +517,165 @@ def MC_table(gridv, gridp, rhoc, trip):
 
 	return [ntri, trip]
 
-def k_loop(k_):
-	global i_
-	global j_
-	global rhoc
-	global II
-	global trip
-	global ii_coor
-	epsilon = 0.000001
-	gridv = np.zeros(8)
-	gridp = np.zeros((8,3))
-	i = i_
-	j = j_
-	k = k_
-	i1 = i + 1; 
-	if i1 >= n_grid_pts[0]: i1 -= n_grid_pts[0]
-	j1 = j + 1; 
-	if j1 >= n_grid_pts[1]: j1 -= n_grid_pts[1]
-	k1 = k + 1; 
-	if k1 >= n_grid_pts[2]: k1 -= n_grid_pts[2]
-	
-	# gridv contains the rho values at the 8 neighboring voxels
-	gridv[0] = rho[i][j][k]
-	gridv[1] = rho[i][j1][k]
-	gridv[2] = rho[i1][j1][k]
-	gridv[3] = rho[i1][j][k]
-	gridv[4] = rho[i][j][k1]
-	gridv[5] = rho[i][j1][k1]
-	gridv[6] = rho[i1][j1][k1]
-	gridv[7] = rho[i1][j][k1]
-	
-	gridp[0] = np.einsum('i,i->i',[i,j,k],grid_spacing)
-	gridp[1] = np.einsum('i,i->i',[i,j+1,k],grid_spacing)
-	gridp[2] = np.einsum('i,i->i',[i+1,j+1,k],grid_spacing)
-	gridp[3] = np.einsum('i,i->i',[i+1,j,k],grid_spacing)
-	gridp[4] = np.einsum('i,i->i',[i,j,k+1],grid_spacing)
-	gridp[5] = np.einsum('i,i->i',[i,j+1,k+1],grid_spacing)
-	gridp[6] = np.einsum('i,i->i',[i+1,j+1,k+1],grid_spacing)
-	gridp[7] = np.einsum('i,i->i',[i+1,j,k+1],grid_spacing)
-
-	[ntri,trip] = MC_table(gridv, gridp, rhoc, trip)
-
-	for nt in range(ntri):
-		for qi in range(3):
-			vertexflag = 0
-			start_2 = time.time()
-			for ii in range(II):
-				vertexdist = np.dot(trip[nt][qi]-ii_coor[ii],trip[nt][qi]-ii_coor[ii])
-				if vertexdist < epsilon:
-					vertexflag = 1
-					break
-			stop_2 = time.time()
-			if vertexflag == 0:
-				ii_coor = np.vstack((ii_coor,np.zeros(3)))
-				ii_coor[II] = trip[nt][qi]
-				II+=1
-	return [ii_coor, II]
-	#print 'returning II to marching cubes:', II
-	#return II
-
 def marching_cubes(rho,pos): 
 	print "---> running marching cubes. this might take a while..."
-	global i_
-	global j_
-	global rhoc
-	global II
-	global trip
-	global ii_coor
+	# load some more variables into global namespace
+
 	II = 1
 	epsilon = 0.000001
 	rhoc = 0.1
 	gridv = np.zeros(8)
 	gridp = np.zeros((8,3))
-	ii_coor = np.zeros((II,3))
+	cube_coor = np.zeros(3)
 	trip = np.zeros((5,3,3))
+	ii_coor = np.zeros((II,3))
 
-	for i_ in range(n_grid_pts[0]):
-		print i_, '/', n_grid_pts[0]
-		for j_ in range(n_grid_pts[1]):
-			##if II > 1000:
-			#print 'II before parallel function:', II
-			#[ii_coor_list,II_list] = Parallel(n_jobs=6)(delayed(k_loop,has_shareable_memory)(k_) for k_ in range(n_grid_pts[2]))
-			#print 'II_LIST !!!!!!!!', II_list
-			#II+=sum(II_list)
-			#print 'II after summing parallel results:', II
-			#else:
-			dummy = [k_loop(k_) for k_ in range(n_grid_pts[2])]
-	
+	for i in range(n_grid_pts[0]):
+		start_1 = time.time()
+		for j in range(n_grid_pts[1]):
+			for k in range(n_grid_pts[2]):
+				i1 = i + 1
+				j1 = j + 1
+				k1 = k + 1
+				if i1 >= n_grid_pts[0]: i1 -= n_grid_pts[0]
+				if j1 >= n_grid_pts[1]: j1 -= n_grid_pts[1]
+				if k1 >= n_grid_pts[2]: k1 -= n_grid_pts[2]
+				
+				# gridv contains the rho values at the 8 neighboring voxels
+				gridv[0] = rho[i][j][k]
+				gridv[1] = rho[i][j1][k]
+				gridv[2] = rho[i1][j1][k]
+				gridv[3] = rho[i1][j][k]
+				gridv[4] = rho[i][j][k1]
+				gridv[5] = rho[i][j1][k1]
+				gridv[6] = rho[i1][j1][k1]
+				gridv[7] = rho[i1][j][k1]
+				
+				# find if the cube is inside bubble, and whether it is near a heavy atom
+				cubefactor = 0
+				for v in range(8):
+					if gridv[v] <= rhoc:
+						cubefactor+=1
+
+				# if next to heavy atom
+				if cubefactor >=4:
+					cube_coor = np.einsum('i,i->i',[i+0.5,j+0.5,k+0.5],grid_spacing)
+
+                                gridp[0] = np.einsum('i,i->i',[i,j,k],grid_spacing)
+                                gridp[1] = np.einsum('i,i->i',[i,j+1,k],grid_spacing)
+                                gridp[2] = np.einsum('i,i->i',[i+1,j+1,k],grid_spacing)
+                                gridp[3] = np.einsum('i,i->i',[i+1,j,k],grid_spacing)
+                                gridp[4] = np.einsum('i,i->i',[i,j,k+1],grid_spacing)
+                                gridp[5] = np.einsum('i,i->i',[i,j+1,k+1],grid_spacing)
+                                gridp[6] = np.einsum('i,i->i',[i+1,j+1,k+1],grid_spacing)
+                                gridp[7] = np.einsum('i,i->i',[i+1,j,k+1],grid_spacing)
+
+				[ntri,trip] = MC_table(gridv, gridp, rhoc, trip)
+
+				for nt in range(ntri):
+					for qi in range(3):
+						vertexflag = 0
+                                                for ii in range(II):
+                                                        vertexdist = np.dot(trip[nt][qi]-ii_coor[ii],trip[nt][qi]-ii_coor[ii])
+                                                        if vertexdist < epsilon:
+                                                                vertexflag = 1
+                                                                break
+                                                if vertexflag == 0:
+                                                        ii_coor = np.vstack((ii_coor, np.zeros(3)))
+                                                        ii_coor[II] = trip[nt][qi]
+                                                        II+=1
+                                                elif vertexflag == 1:
+                                                        break
+		stop_1 = time.time()
+		print i, "/", n_grid_pts[0]
 	return ii_coor
 
-##### start instant_interface() code #####	
+#--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
+def compute_VRS(ii_point):
+	def erf(x):
+		sign = 1 if x >= 0 else -1
+		x = abs(x)
+		a1 =  0.254829592
+		a2 = -0.284496736
+		a3 =  1.421413741
+		a4 = -1.453152027
+		a5 =  1.061405429
+		p  =  0.3275911
+		t = 1.0/(1.0 + p*x)
+		y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*np.exp(-x*x)
+		return sign*y
 
-def instant_interface(grofile,trajfile,**kwargs):
+	vrs=0
+	SI_unit_conv = 1.084E8*1.602E-19*1E12 				# pV
+	ii_pos = ii_coor[ii_point]
+	for i in range(n_water)[::3]:
+		for j in range(3):
+			rvec = water_coor[i+j]-ii_pos
+			wrap = [int((rvec[i]/pbc[i])+0.5) for i in range(3)]
+			rvec = [rvec[i] - wrap[i]*pbc[i] for i in range(3)]
+			r = np.sqrt(np.dot(rvec,rvec))
+			vrs += chg[j] * erf(r/sigma) / (r)
+	return vrs*SI_unit_conv
 
-	global work
+def compute_refVal():
+	def erf(x):
+		sign = 1 if x >= 0 else -1
+		x = abs(x)
+		a1 =  0.254829592
+		a2 = -0.284496736
+		a3 =  1.421413741
+		a4 = -1.453152027
+		a5 =  1.061405429
+		p  =  0.3275911
+		t = 1.0/(1.0 + p*x)
+		y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*np.exp(-x*x)
+		return sign*y
+
+	vrs=0
+	for i in range(n_water)[::3]:
+		for j in range(3):
+			r = np.sqrt(np.dot(water_coor[i+j],water_coor[i+j]))
+			vrs += chg[j] * erf(r/sigma) / (r)
+	return vrs
+
+def scale_potential(ii):
+	return VRS[ii]-refVal
+
+def compute_LREP(positions,ii_coor,water_coor):
+
+	global VRS
+	global chg
+	global n_water
+	global sigma
+
+	sigma = 0.45
+	npro = n_heavy_atoms
+	nconf = 1.0
+	chg = [-0.834, 0.417, 0.417]	
+	sigma = 0.45
+	II = len(ii_coor)
+	VRS = np.zeros(II)
+
+	n_water = water_coor.shape[0]
+	print 'starting parallel job...'
+	VRS = Parallel(n_jobs=8)(delayed(compute_VRS,has_shareable_memory)(ii_point) for ii_point in range(II)) 
+
+	global refVal
+	refVal = compute_refVal()
+
+	LREP = Parallel(n_jobs=8)(delayed(scale_potential,has_shareable_memory)(ii) for ii in range(II))
+	return LREP 
+
+def electrostatic_map(grofile,trajfile,**kwargs):
 	
-	#---unpack
+	#--- UNPACK UPSTREAM DATA
+	global work
 	sn = kwargs['sn']
 	work = kwargs['workspace']
-	
+
+	#--- READ IN PARAMETERS FROM YAML FILE
 	global dL
 	global selection_key
-	
 	if 'selection_key' in kwargs['calc']['specs']['selector']:
 		selection_key = kwargs['calc']['specs']['selector']['selection_key']
 	else: 
@@ -613,56 +688,49 @@ def instant_interface(grofile,trajfile,**kwargs):
 		writepdb = 'y'
 	else: writepdb = 'n'
 
+	#--- LOAD VARIABLES INTO GLOBAL NAMESPACE
+	global box_shift
 	global scale
 	global pos
 	global rho
+	global water_coor
+	global ii_coor
 	scale = 10.0
-	[nframes, positions] = extract_traj_info(grofile,trajfile,selection_key)
-	all_coors = []
 
+	#--- READ DATA
+	[nframes, positions, water] = extract_traj_info(grofile,trajfile,selection_key)
+			# defines global variables: n_heavy_atoms, pbc
+	
+	#--- LOOP THROUGH FRAMES IN TRAJECTORY
 	for fr in range(nframes):
 	
+		#--- EXTRACT INFO FOR FRAME, FR
 		print 'working on frame', fr+1, ' of', nframes
 		pos=positions[fr] 
+		water_coor = water[fr]
+	
+		#--- COMPUTE RHO
 		coarse_grain_start = time.time()
 		rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
-		
 		coarse_grain_stop = time.time()
 		print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
+	
+		#--- MARCHING CUBES
 		marching_cubes_start = time.time()
 		interface_coors = marching_cubes(rho,pos) # defines global variables: cube_coor
+		ii_coor_scaled = [[j*scale for j in i] for i in interface_coors]
+		ii_coor = [q-box_shift[fr] for q in ii_coor_scaled]
 		marching_cubes_stop = time.time()
 		print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
-		scaled_coors = [[j*scale for j in i] for i in interface_coors]
-
-		if writepdb:
-			write_pdb(scaled_coors,fr)
-
-		all_coors.append(np.array(scaled_coors))
-		scaled_coors = []
-
 	
-		print 'total elapsed time:', marching_cubes_stop-coarse_grain_start
-
-	#--- nrows = 10;ncols = [np.random.randint(1,100) for i in range(nrows)];raw = [np.arange(i) for i in ncols]
-	#--- packed = np.concatenate(([len(raw)],[len(i) for i in raw],np.concatenate(raw)))
-	#--- nrows_u =  packed[0]
-	#--- ncols_u = packed[1:1+nrows_u]
-	#--- unpacked1d = packed[1+nrows_u:]
-	#--- inds = np.cumsum(ncols_u)
-	#--- unpacked = [unpacked1d[np.arange(inds[i],inds[i+1])] for i in range(len(inds)-1)]
-	#nrows = 10;ncols = [np.random.randint(1,100) for i in range(nrows)];raw = [np.arange(i) for i in ncols]
-	print 'LENGTH OF ALL_COORS', len(all_coors)
-	for ac in all_coors:
-		print 'NUMBER OF ELEMENTS IN ONE ENTRY IN ALL_COORS:', len(ac), ', ALL COORS ENTRY:', ac
-	packed = np.concatenate(([len(all_coors)],[len(i) for i in all_coors],np.concatenate(all_coors)))
-	#nrows_u =  int(packed[0])
-	#ncols_u = packed[1:1+nrows_u]
-	#unpacked1d = packed[1+nrows_u:]
-	#inds = np.cumsum(ncols_u)
-	#unpacked = [unpacked1d[np.arange(inds[i],inds[i+1])] for i in range(len(inds)-1)]
+		##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
+		LREP = compute_LREP(pos, ii_coor,water_coor)
+		print 'potential calculation completed. db...'
+		write_pdb(ii_coor,LREP,fr)
 	
-	#---pack
+	#--- PACK UP RESULTS AND SEND BACK TO OMNICALC
 	attrs,result = {},{}
-	result['interface_coors'] = np.array(packed) # contacts has to be a numpy array
+	result['done'] = np.array(['y']) # data has to be a numpy array
 	return result,attrs	
+
+
