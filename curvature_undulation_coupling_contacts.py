@@ -9,7 +9,7 @@ import codes.curvature_coupling
 from codes.curvature_coupling.curvature_coupling import InvestigateCurvature
 from codes.readymade_meso_v1 import import_curvature_inducer_points,import_membrane_mesh
 
-def curvature_undulation_coupling_dex(**kwargs):
+def curvature_undulation_coupling_contacts(**kwargs):
 	"""
 	Supervise the curvature-undulation coupling calculation.
 	"""

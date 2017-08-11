@@ -122,7 +122,6 @@ calculations:
               - 2.5
               - 1.0
         curvature_sum: mean
-  #instant_interface:
   electrostatic_map:
     uptype: simulation
     slice_name: current
@@ -132,16 +131,8 @@ calculations:
       writepdb: 'y'
       selector:
         selection_key: "resname POPC"
+        water_resname: "resname TIP3"
         grid_spacing: 0.2
-  #electrostatic_mapping:
-  #  uptype: simulation
-  #  slice_name: current
-  #  group: all
-  #  collections: all
-  #  specs:
-  #    writepdb: 'y'
-  #    water_resname: "resname TIP3"
-  #  upstream: instant_interface
 variables:
   #---protected
   art_director: art_ocean.py

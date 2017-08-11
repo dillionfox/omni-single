@@ -720,13 +720,22 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	work = kwargs['workspace']
 
 	#--- READ IN PARAMETERS FROM YAML FILE
-	global dL
 	global selection_key
+	global water_resname
+	global dL
+
 	if 'selection_key' in kwargs['calc']['specs']['selector']:
 		selection_key = kwargs['calc']['specs']['selector']['selection_key']
 	else: 
 		print 'need to provide selection key in yaml file'
 		exit()
+
+	if 'water_resname' in kwargs['calc']['specs']['selector']:
+		water_resname = kwargs['calc']['specs']['selector']['water_resname']
+	else: 
+		print 'did not provide water_resname in yaml file. Using water_resname = resname TIP3'
+		water_resname = "resname TIP3"
+
 	if 'grid_spacing' in kwargs['calc']['specs']['selector']:
 		dL = kwargs['calc']['specs']['selector']['grid_spacing']
 	else: dL = 0.1 
@@ -749,31 +758,6 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	#--- LOOP THROUGH FRAMES IN TRAJECTORY
 	frames = range(nframes)
 	check = Parallel(n_jobs=8)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
-	#for fr in range(nframes):
-	#
-	#	#--- EXTRACT INFO FOR FRAME, FR
-	#	print 'working on frame', fr+1, ' of', nframes
-	#	pos=positions[fr] 
-	#	water_coor = water[fr]
-	#
-	#	#--- COMPUTE RHO
-	#	coarse_grain_start = time.time()
-	#	rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
-	#	coarse_grain_stop = time.time()
-	#	print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
-	#
-	#	#--- MARCHING CUBES
-	#	marching_cubes_start = time.time()
-	#	interface_coors = marching_cubes(rho) # defines global variables: cube_coor
-	#	ii_coor_scaled = [[j*scale for j in i] for i in interface_coors]
-	#	ii_coor = [q-box_shift[fr] for q in ii_coor_scaled]
-	#	marching_cubes_stop = time.time()
-	#	print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
-	#
-	#	#--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
-	#	LREP = compute_LREP(ii_coor,water_coor)
-	#	print 'potential calculation completed. db...'
-	#	write_pdb(ii_coor,LREP,fr)
 	
 	#--- PACK UP RESULTS AND SEND BACK TO OMNICALC
 	if check == 0:
