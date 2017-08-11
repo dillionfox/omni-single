@@ -13,7 +13,8 @@ def run_contacts(fr):
 
 	uni.trajectory[fr]
 	protein = uni.select_atoms('global protein')
-	selstring = 'around ' + str(cutoff) +  ' global resname POPC or resname DOPC or resname POPE'
+	#selstring = 'around ' + str(cutoff) +  ' global resname POPC or resname DOPC or resname POPE'
+	selstring = 'around ' + str(cutoff) +  ' global '+ resnames_lipid
 	contacts = protein.select_atoms(selstring)
 
 	reslist = contacts.residues.resids
@@ -35,12 +36,23 @@ def protein_lipid_contacts(grofile,trajfile,**kwargs):
 	global cutoff
 	global uni
 	global resids_per_frame
-	cutoff = 2.0
+	global resnames_lipid
+
+	if 'resnames_lipid' in kwargs['calc']['specs']['selector']:
+		resnames_lipid = kwargs['calc']['specs']['selector']['resnames_lipid']
+	else: 
+		print 'did not provide lipid resnames in yaml file. Using resnames_lipid = resname POPC or resname DOPC or resname POPE'
+		resnames_lipid = "resnames_lipid = resname POPC or resname DOPC or resname POPE"
+
+	if 'distance_cutoff' in kwargs['calc']['specs']['selector']:
+		cutoff = kwargs['calc']['specs']['selector']['distance_cutoff']
+	else: 
+		print 'did not provide distance cutoff in yaml file. Using cutoff = 2.0'
+		cutoff = 2.0
 
 	#---unpack
 	sn = kwargs['sn']
 	work = kwargs['workspace']
-	#parallel = kwargs.get('parallel',False)
 	uni = MDAnalysis.Universe(grofile,trajfile)
 
 	nframes = len(uni.trajectory)

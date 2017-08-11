@@ -53,10 +53,8 @@ calculations:
     slice_name: current
     collections: all
     specs:
+      # note that downstream looping over 0.5,0.25 is broken
       grid_spacing: 0.5
-        #loop:
-        #  - 0.5
-        #  #- 0.25
       upstream: lipid_abstractor
   lipid_mesh:
     uptype: post
@@ -96,6 +94,8 @@ calculations:
     slice_name: current
     group: all
     collections: all
+    specs:
+      selector: resnames_lipid
   curvature_undulation_coupling:
     uptype: post
     group: all
@@ -150,9 +150,9 @@ variables:
     mk002:
         psf: "1protein_again_autopsf-v2.psf"
         dcds: ['test0000-v2.dcd','test0001-v2.dcd','test0002-v2.dcd','test0003-v2.dcd','test0004-v2.dcd']
-    mk003:
-        psf: "1protein_again_autopsf-v2.psf"
-        dcds: ['repetitive.dcd']
+    #mk003:
+    #    psf: "1protein_again_autopsf-v2.psf"
+    #    dcds: ['repetitive.dcd']
 meta:
   short_namer: "lambda s, spot : ('v'+re.match('^simulation-v(\\d+)',s).group(1) if re.match('^simulation-v(\\d+)',s) else s)"
   mk001: 
@@ -162,7 +162,7 @@ meta:
     label: "v2"
     nprots: 1
   mk003: 
-    label: "v3"
+    label: "long simulation"
     nprots: 1
   mk004: 
     label: "87 frames"
