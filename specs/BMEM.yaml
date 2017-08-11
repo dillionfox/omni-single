@@ -107,12 +107,20 @@ calculations:
         undulations:
           grid_spacing: 0.5
       design:
-        loader_protein: 
-          module: codes.contacts_curvature_coupling
-          function: contacts_protein_loader
-        loader: 
-          module: codes.contacts_curvature_coupling
-          function: contacts_membrane_loader
+        loader_membrane:
+          module: codes.curvature_coupling_loader
+          function: curvature_coupling_loader_membrane
+        loader_protein:
+          module: codes.curvature_coupling_loader
+          function: curvature_coupling_loader_protein
+        #loader_protein: 
+        #  module: codes.contacts_curvature_coupling
+        #  function: curvature_coupling_loader_protein
+        #  #function: contacts_protein_loader
+        #loader: 
+        #  module: codes.contacts_curvature_coupling
+        #  function: curvature_coupling_loader_membrane
+        #  #function: contacts_membrane_loader
         style: wilderness
         curvature_positions: 
           method: neighborhood
@@ -125,17 +133,17 @@ calculations:
               - 2.5
               - 1.0
         curvature_sum: mean
-  electrostatic_map:
-    uptype: simulation
-    slice_name: current
-    group: all
-    collections: all
-    specs:
-      writepdb: 'y'
-      selector:
-        selection_key: "resname POPC"
-        water_resname: "resname TIP3"
-        grid_spacing: 0.2
+  #electrostatic_map:
+  #  uptype: simulation
+  #  slice_name: current
+  #  group: all
+  #  collections: all
+  #  specs:
+  #    writepdb: 'y'
+  #    selector:
+  #      selection_key: "resname POPC"
+  #      water_resname: "resname TIP3"
+  #      grid_spacing: 0.2
 variables:
   #---protected
   art_director: art_ocean.py
