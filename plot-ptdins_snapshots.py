@@ -21,14 +21,19 @@ kwargs_vmdmake = {'CGBONDSPATH':'~/libs/cg_bonds.tcl','GMXDUMP':'~/libs/gmxdump'
 routine = [
 	#---head_snaps_detail depends on head_angle_snaps
 	'head_angle_snaps','head_angle_snaps_detail',
-	'common_hydrogen_bonding'][-1:]
+	'common_hydrogen_bonding',
+	'common_hydrogen_bonding_specific',
+	'consolidated_hydrogen_bonding'][-1:]
 
-if 'data_tilt' not in globals(): 
-	sns,(data_tilt,calc) = work.sns(),plotload('head_angle',work)
-	sns,(data_hbonds,calc) = work.sns(),plotload('hydrogen_bonding',work)
-	data_salt,calc_salt = plotload('salt_bridges',work)
-	#---! was thinking of checking proximity to box
-	#---! ...with the lipid abstractor: data_points,calc_points = plotload('lipid_abstractor',work)
+if 'data' not in globals():
+	data,calc = plotload(plotname)
+	sns = work.sns()
+	if False:
+		sns,(data_tilt,calc) = work.sns(),plotload('head_angle',work)
+		#---! not even used!
+		data_salt,calc_salt = plotload('salt_bridges',work)
+		#---! was thinking of checking proximity to box
+		#---! ...with the lipid abstractor: data_points,calc_points = plotload('lipid_abstractor',work)
 
 if 'head_angle_snaps' in routine:
 
@@ -110,6 +115,8 @@ if 'head_angle_snaps' in routine:
 			#---each render needs to start from the beginning because we move things around for the good side
 			#---loop over desired lipid/frame pairs for rendering
 			for key in [r for r in reps if r[0]==sn]: 
+
+				import ipdb;ipdb.set_trace()
 
 				#---run VMD to make the snapshots via vmdmake
 				view = vmdmake.VMDWrap(site=tempdir,gro=gro,xtc=xtc,tpr=tpr,
@@ -261,7 +268,11 @@ def render_lipid_pair(**kwargs):
 	Abstracted the vmdmake routine for looping.
 	"""
 	#---default settings
-	hbond_style = 'dashed'
+	hbond_style = ['dashed','cylinder'][-1]
+	licorice_thick = 0.4
+	hbond_cylinder_radius = 0.15
+	goodsell_ions = False
+	goodsell_lipids = True
 	#---unpack the kwargs
 	sn = kwargs.pop('sn')
 	frame = kwargs.pop('frame')
@@ -269,6 +280,7 @@ def render_lipid_pair(**kwargs):
 	hydrogen_bonds = kwargs.pop('hydrogen_bonds',{})
 	pair = kwargs.pop('pair',{})
 	snapshot_fn = kwargs.pop('fn')
+	associates = kwargs.pop('associates',None)
 	if not pair: raise Exception('render_lipid_pair requires a pair')
 	gro,xtc,tpr = [kwargs.pop(i) for i in 'gro xtc tpr'.split()]
 	if kwargs: raise Exception('unprocessed arguments: %s'%kwargs)
@@ -292,12 +304,18 @@ def render_lipid_pair(**kwargs):
 	#---show both lipids
 	selections.append("(resname %s and resid %s) and not hydrogen"%(pair['resname_1'],pair['resid_1']))
 	view.select(**{'partner_1':selections[-1],'style':
-		'Licorice 0.200000 12.000000 12.000000','goodsell':True})
+		'Licorice %.3f 12.000000 12.000000'%licorice_thick,'goodsell':goodsell_lipids})
 	selections.append("(resname %s and resid %s) and not hydrogen"%(pair['resname_2'],pair['resid_2']))
 	view.select(**{'partner_2':selections[-1],
-		'style':'Licorice 0.200000 12.000000 12.000000','goodsell':True})
+		'style':'Licorice %.3f 12.000000 12.000000'%licorice_thick,'goodsell':goodsell_lipids})
+	#---show associates
+	if associates:
+		for assoc_num,assoc in enumerate(associates):
+			selections.append("(resname %s and resid %s) and not hydrogen"%(assoc['resname'],assoc['resid']))
+			view.select(**{'assoc_%d'%assoc_num:selections[-1],'style':
+				'Licorice %.3f 12.000000 12.000000'%licorice_thick,'goodsell':goodsell_lipids})
 	#---for each hydrogen bond, show the lipids with the hydrogen (both are plotted to include the bond)
-	this_style = {'style':'Licorice 0.200000 12.000000 12.000000','goodsell':True}
+	this_style = {'style':'Licorice %.3f 12.000000 12.000000'%licorice_thick,'goodsell':goodsell_lipids}
 	for hnum,hbond in enumerate(hydrogen_bonds):
 		#---the first residue in the pair is the donor and we draw it here
 		selstring = "(resname %s and resid %s)"%(hbond['resname_1'],hbond['resid_1'])
@@ -362,21 +380,25 @@ def render_lipid_pair(**kwargs):
 	#---show the good side
 	view.command(vmd_render_good_side_bond)
 	#---see vmdmake.py for vmd colors
-	view.set_color_cursor({'MG':'pink','Cal':'blue','NA':'green','K':'tan'}.get(
-		work.meta[sn]['cation'],'purple'))
+	cation = work.meta[sn].get('cation_relevant',work.meta[sn]['cation'])
+	view.set_color_cursor({'MG':'pink','Cal':'blue','NA':'green','K':'tan'}.get(cation,'purple'))
 	#---show ions near both residues
 	for resid_ind in [1,2]:
 		view.select(**{'near_ions_%d'%resid_ind:
 			"name %s and within 4.6 of (resname %s and resid %s)"%(
-			work.meta[sn]['cation'],work.meta[sn]['ptdins_resname'],pair['resid_%d'%resid_ind]),
-			'smooth':False,'style':'VDW 0.4 12.0','goodsell':True,'color_specific':True})
+			cation,work.meta[sn]['ptdins_resname'],pair['resid_%d'%resid_ind]),
+			'smooth':False,'style':'VDW 0.4 12.0','goodsell':goodsell_ions,'color_specific':True})
+	#---emphazize the hydrogen bonds
 	for hnum,hbond in enumerate(hydrogen_bonds):
 		if hbond_style=='cylinder':
+			view.command('draw color black')
 			view.command(("draw cylinder [expr [$partner_1_hbond_%d_ref get {x y z}]] "+
-				"[expr [$partner_2_hbond_%d_ref get {x y z}]] radius 0.1")%(hnum,hnum))
+				"[expr [$partner_2_hbond_%d_ref get {x y z}]] radius %.3f")%(
+				hnum,hnum,hbond_cylinder_radius))
 		elif hbond_style=='dashed':
 			view.command(("draw line [expr [$partner_1_hbond_%d_ref get {x y z}]] "+
 				"[expr [$partner_2_hbond_%d_ref get {x y z}]] style dashed")%(hnum,hnum))
+		else: raise Exception('unclear hydrogen bond style %s'%hbond_style)
 	#---render to disk
 	view['snapshot_filename'] = snapshot_fn
 	view.do('snapshot')
@@ -394,8 +416,7 @@ if 'common_hydrogen_bonding' in routine:
 	#---number of snapshots to do. we walk down the list of ranked commonest bonds, which is 
 	#---...partly arbitrary (see notes below) hence  this just gives us more snapshots more or less
 	#---you can specify explicit nranked list to debug things very carefully
-	nranked = 10
-	# nranked = [0]
+	nranked = 10 # or try a list e.g. [0]
 
 	#---store the snapshots in the post_plot_spot according to the tag
 	tempdir = os.path.join(work.paths['post_plot_spot'],'fig.hydrogen_bonding.%s'%tag_hbonds)
@@ -418,7 +439,7 @@ if 'common_hydrogen_bonding' in routine:
 		snapshot_catalog = {}
 		#---get the top three hydrogen bonds from each simulation
 		for sn in sns_group:
-			bonds,obs,valid_frames = [data_hbonds[sn]['data'][i] 
+			bonds,obs,valid_frames = [data['hydrogen_bonding'][sn]['data'][i] 
 				for i in ['bonds','observations','valid_frames']]
 			#---discard atom names
 			bonds_red = bonds[:,np.array([0,1,3,4])]
@@ -451,10 +472,8 @@ if 'common_hydrogen_bonding' in routine:
 				#---...will probably have the max since our unique residue-residue bond probably only has
 				#---...a handful of different unique bonds over the atoms
 				fr = np.argmax(obs.T[map_red_to_obs[ranking[rank_num]]].sum(axis=0))
-
 				#---! wow. where to begin. this frame is wrong and it was really tough to figure out why
 				frame_actual = valid_frames[fr]
-
 				#---for each of the observed hydrogen bonds at this frame we save instructions to render it
 				#---first we get the handful of bonds that for our resid-resid pair
 				bonds_by_pair = bonds[map_red_to_obs[ranking[rank_num]]][
@@ -478,86 +497,278 @@ if 'common_hydrogen_bonding' in routine:
 				render_spec = dict(sn=sn,pair=lipid_pair_spec,frame=frame_actual,tempdir=tempdir,fn=filetag)
 				render_spec.update(**work.get_gmx_sources(sn=sn,calc=calc))
 				render_spec.update(**bond_spec)
+				#---check the lipid distance to see if we are broken across PBCs
+				resids = [np.where(data['lipid_abstractor'][sn]['data']['resids']==int(
+					bond_spec['hydrogen_bonds'][0]['resid_%d'%i]))[0][0] for i in [1,2]]
+				com_distance = data['lipid_abstractor'][sn]['data']['points'][
+					frame_actual][resids].ptp(axis=0)
+				if np.any(com_distance>=data['lipid_abstractor'][sn]['data']['vecs'][frame_actual]/2.):
+					status('lipids are broken over PBCs and this rendering algo cannot work so skipping',
+						tag='warning')
+					continue
+				import ipdb;ipdb.set_trace()
 				render_lipid_pair(**render_spec)
 				status('done rendering simulation %s'%sn,i=rank_num,looplen=len(nranked),tag='render')
 				snapshot_catalog[(sn,rank_num)] = render_spec
 
-if 'common_hydrogen_bonding_new_development' in routine:
+if 'common_hydrogen_bonding_specific' in routine:
 
-	sn = 'membrane-v532'
-
+	overwrite_snaps = True
+	sns_group = list(sns)
+	#---! override because tired of dealing with upside-down lipids!
+	sns_group = [sn for sn in work.sns() if work.meta[sn]['composition_name']=='asymmetric']
 	#---find pairs of a particular type that are the most common
 	trawler = ('ptdins','ptdins')
-	dat = data_hbonds[sn]['data']
-	resnames = dict(zip(dat['resnames'],dat['resnames']))
-	resnames['ptdins'] = work.meta[sn]['ptdins_resname']
-	resname_pair = [resnames[j] for j in trawler]
-	if False:
-		these_bonds = np.where(np.any([np.all((
-			dat['bonds'][:,i]==resname_pair[0],dat['bonds'][:,j]==resname_pair[1]),axis=0) 
-			for i,j in [(0,3),(3,0)]],axis=0))[0]
-		#---filter for the resnames in trawler without regard to order
-		these_bonds = np.where(np.any([np.all((
-			dat['bonds'][:,i]==resname_pair[0],dat['bonds'][:,j]==resname_pair[1]),axis=0) 
-			for i,j in [(0,3),(3,0)]],axis=0))[0]
-		modal_bond = np.argsort(dat['observations'].sum(axis=0)[these_bonds])[-1]
-		#---the modal bond is currently given over the unique bonds
-		#---...however we actually want it to happen over bond-atom pairs while ignoring the resid
-		#---...so in the next part we will reduce the bond list to find the most common bonds
-		#---the following bondlist discards the residue indices and retain the lipid names and atom names
-		bondlist = dat['bonds'][:,np.array([0,2,3,5])]
-		bondlist_inds,bondlist_counts = uniquify(bondlist)
-		subsel = np.where(np.any([np.all((
-			bondlist[bondlist_inds][:,np.array([0,2])]==resname_pair[::i]),axis=1) 
-			for i in [1,-1]],axis=0))[0]
-		#---the bonds are already sorted
-		modal_bond_ind = bondlist_inds[subsel][0]
-		modal_bond = bondlist[modal_bond_ind]
-		#---now that we have the modal bond we can find the modal instance of the bond in the complete list
-		modal_bond_pair = modal_bond[:2],modal_bond[2:]
-		matched_bonds = np.where(np.any([np.all([np.all(
-			dat['bonds'][:,np.array(i)]==modal_bond_pair[::k][j],axis=1) 
-			for i,j in [([0,2],0),([3,5],1)]],axis=0) for k in [1,-1]],axis=0))[0]
-		modal_matched_bonds_ind = np.argsort(dat['observations'].sum(axis=0)[matched_bonds])[-1]
-		#---! realized here that the modal bond is intramolecular because we did not filter those
-	#---start with the complete set of bonds
-	bonds = dat['bonds']
-	obs = dat['observations']
-	#---first filter for intermolecular bonds
-	bonds_inter = bonds[:,1]!=bonds[:,4]
-	sel_inter = np.where(bonds_inter)
-	bondlist = bonds[sel_inter]
-	#---get unique intermolecular bonds
-	bondlist_inds,bondlist_counts = uniquify(bondlist)
-	#---filter for bonds where the two residue names are set above by trawler
-	sel_resname_match = np.where(np.any([np.all((
-		bondlist[bondlist_inds][:,np.array([0,3])]==resname_pair[::i]),axis=1) for i in [1,-1]],axis=0))[0]
-	#---the bonds are already sorted
-	modal_bond_ind = bondlist_inds[sel_resname_match][0]
-	modal_bond = bondlist[modal_bond_ind]
-	#---now that we have the modal bond we can find the modal instance of the bond in the complete list
-	modal_bond_pair = modal_bond[np.array([0,2])],modal_bond[np.array([3,5])]
-	matched_bonds = np.where(np.any([np.all([np.all(
-		bondlist[bondlist_inds][:,np.array(i)]==modal_bond_pair[::k][j],axis=1) 
-		for i,j in [([0,2],0),([3,5],1)]],axis=0) for k in [1,-1]],axis=0))[0]
-	modal_matched_bonds_ind = np.argsort(obs.sum(axis=0)[sel_inter][bondlist_inds][matched_bonds])[-1]
-	#---now we choose the actual observed bond that is the commonest
-	modal_bond = bonds[sel_inter][bondlist_inds][matched_bonds][modal_matched_bonds_ind]
-	#---this bond is actually kind of sparse so now we check for total bonds between residues on this list
-	bonds_sub = bonds[sel_inter][bondlist_inds][sel_resname_match]
-	#---we could use uniquify but we want both directions so we sort first
-	modal_resname_pair_ind = uniquify(np.array([sorted(i) for i in bonds_sub[:,np.array([1,4])]]))[0][0]
-	#---probably not a coincidence that this is usually zero, since we are sorting this upstream
-	#---get the resid pair for the commonst bond between all residues that match trawler regardless of atom
-	modal_resname_pair = bonds_sub[modal_resname_pair_ind,np.array([1,4])]
-	sel_resid_pair = np.where(np.any([np.all(
-		[bondlist[bondlist_inds][sel_resname_match][:,i]==modal_resname_pair[::k][j] 
-		for i,j in [(1,0),(4,1)]],axis=0) for k in [1,-1]],axis=0))[0]
-	#---get the frame where these two are bound the most
-	fr = np.argmax(obs.T[sel_inter][bondlist_inds][sel_resname_match][sel_resid_pair].T.sum(axis=1))
-	#---which two bonds we can expect at this frame (note there may be other frames with equal multiplicities)
-	which_these_bonds_inds = obs.T[sel_inter][bondlist_inds][sel_resname_match][sel_resid_pair].T[fr]
-	which_these_bonds = bondlist[bondlist_inds][sel_resname_match][
-		sel_resid_pair][np.where(which_these_bonds_inds)]
-	#---finally we have a decision about what to plot
+	trawler = ('ptdins','CHL1')
+	nranked = 10 # or try a list e.g. [0]
+	tag_hbonds = 'v5_%s_%s'%(trawler)
+	#---! eventually we need a loop over the trawler, tag, and nranked sections
+	#---store the snapshots in the post_plot_spot according to the tag
+	tempdir = os.path.join(work.paths['post_plot_spot'],'fig.hydrogen_bonding.%s'%tag_hbonds)
+	#---only make figures if the folder is empty. it only takes a few minutes -- no more coding logic
+	if (os.path.isdir(tempdir) and not overwrite_snaps): status('found %s and refusing to overwrite'%tempdir)
+	else:
+		try: os.mkdir(tempdir)
+		except: status('directory exists so we are overwriting')
+		status('snapshots dropping to %s'%tempdir,tag='note')
+		if not overwrite_snaps: status('delete the snapshot directory to rebuild them')
+		bond_spec_keys = 'resname_1 resid_1 name_1 resname_2 resid_2 name_2 name_h'
+		for sn in sns_group:
+			dat = data['hydrogen_bonding'][sn]['data']
+			resnames = dict(zip(dat['resnames'],dat['resnames']))
+			resnames['ptdins'] = work.meta[sn]['ptdins_resname']
+			resname_pair = [resnames[j] for j in trawler]
+			#---start with the complete set of bonds
+			bonds = dat['bonds']
+			obs = dat['observations']
+			#---first filter for intermolecular bonds
+			bonds_inter = bonds[:,1]!=bonds[:,4]
+			sel_inter = np.where(bonds_inter)
+			bondlist = bonds[sel_inter]
+			#---get unique intermolecular bonds
+			#---! THEY ARE ALREADY UNIQUE. SWITCHING TO A NEW, FIFTH METHOD WITH A NEW TAG
+			bondlist_inds,bondlist_counts = uniquify(bondlist)
+			#---filter for bonds where the two residue names are set above by trawler
+			sel_resname_match = np.where(np.any([np.all((bondlist[bondlist_inds][:,
+				np.array([0,3])]==resname_pair[::i]),axis=1) for i in [1,-1]],axis=0))[0]
+			#---sort bonds by average occupancy
+			resort_by_mean = obs.mean(axis=0)[bondlist_inds[sel_resname_match]].argsort()[::-1]
+			modal_bond_inds = bondlist_inds[sel_resname_match][resort_by_mean]
+			#---loop over rankings
+			nranked = range(nranked) if type(nranked)==int else nranked
+			for rank_num in nranked[:len(modal_bond_inds)]:
+				modal_bond_ind = modal_bond_inds[rank_num]
+				modal_bond = bondlist[modal_bond_ind]
+				#---now that we have the modal bond we can find the modal instance of the bond in the list
+				modal_bond_pair = modal_bond[np.array([0,2])],modal_bond[np.array([3,5])]
+				matched_bonds = np.where(np.any([np.all([np.all(
+					bondlist[bondlist_inds][:,np.array(i)]==modal_bond_pair[::k][j],axis=1) 
+					for i,j in [([0,2],0),([3,5],1)]],axis=0) for k in [1,-1]],axis=0))[0]
+				modal_matched_bonds_ind = np.argsort(obs.sum(axis=0)[
+					sel_inter][bondlist_inds][matched_bonds])[-1]
+				#---now we choose the actual observed bond that is the commonest
+				modal_bond = bonds[sel_inter][bondlist_inds][matched_bonds][modal_matched_bonds_ind]
+				#---this bond is actually kind of sparse so now we check for total bonds between 
+				#---...residues on this list
+				bonds_sub = bonds[sel_inter][bondlist_inds][sel_resname_match]
+				#---we could use uniquify but we want both directions so we sort first
+				modal_resname_pair_ind = uniquify(np.array([sorted(i) 
+					for i in bonds_sub[:,np.array([1,4])]]))[0][0]
+				#---probably not a coincidence that this is usually zero, since we are sorting this upstream
+				#---get the resid pair for the commonst bond between all residues that match trawler 
+				#---...regardless of atom
+				modal_resname_pair = bonds_sub[modal_resname_pair_ind,np.array([1,4])]
+				sel_resid_pair = np.where(np.any([np.all(
+					[bondlist[bondlist_inds][sel_resname_match][:,i]==modal_resname_pair[::k][j] 
+					for i,j in [(1,0),(4,1)]],axis=0) for k in [1,-1]],axis=0))[0]
+				#---get the frame where these two are bound the most
+				fr = np.argmax(obs.T[sel_inter][bondlist_inds][sel_resname_match][
+					sel_resid_pair].T.sum(axis=1))
+				import ipdb;ipdb.set_trace()
+				#---which two bonds we can expect at this frame (note there may be other frames with equal 
+				#---...multiplicities)
+				which_these_bonds_inds = obs.T[sel_inter][bondlist_inds][
+					sel_resname_match][sel_resid_pair].T[fr]
+				which_these_bonds = bondlist[bondlist_inds][sel_resname_match][
+					sel_resid_pair][np.where(which_these_bonds_inds)]
+				#---! continuing development after a while
+				#---prepare the pair specification
+				valid_frames = data['hydrogen_bonding'][sn]['data']['valid_frames']
+				frame_actual = valid_frames[fr]
+				#---only one of the bonds is necessary to specify the lipids
+				lipid_pair_spec = dict([(i,which_these_bonds[0][ii]) 
+					for ii,i in enumerate(bond_spec_keys.split())])
+				filetag = 'fig.snapshot.%s.fr%d.%s_%s_o%d'%(sn,fr,
+					lipid_pair_spec['resid_1'],lipid_pair_spec['resid_2'],rank_num)
+				render_spec = dict(sn=sn,pair=lipid_pair_spec,frame=frame_actual,tempdir=tempdir,fn=filetag)
+				render_spec.update(**work.get_gmx_sources(sn=sn,calc=calc))
+				bond_spec = dict(hydrogen_bonds=[dict([(i,bond[ii]) 
+					for ii,i in enumerate(bond_spec_keys.split())]) 
+					for bond in which_these_bonds])
+				render_spec.update(**bond_spec)
+				#---check the lipid distance to see if we are broken across PBCs
+				resids = [np.where(data['lipid_abstractor'][sn]['data']['resids']==int(
+					bond_spec['hydrogen_bonds'][0]['resid_%d'%i]))[0][0] for i in [1,2]]
+				com_distance = data['lipid_abstractor'][sn]['data']['points'][
+					frame_actual][resids].ptp(axis=0)
+				if np.any(com_distance>=data['lipid_abstractor'][sn]['data']['vecs'][frame_actual]/2.):
+					status('lipids are broken over PBCs and this rendering algo cannot work so skipping',
+						tag='warning')
+					#continue
+				render_lipid_pair(**render_spec)
 
+if 'consolidated_hydrogen_bonding' in routine:
+
+	#---extra settings
+	overwrite_snaps = False
+	#---! override because tired of dealing with upside-down lipids!
+	sns_group = [sn for sn in work.sns() if work.meta[sn]['composition_name']=='asymmetric']
+
+	#---specify a tag for each method
+	methods = {
+		#'v6_common':{'nranked':10,'sns':['membrane-v532']},
+		#'v6_ptdins_chl1':{'nranked':10,'resname_filter':['PtdIns','CHL1'],'sns':['membrane-v532']},
+		'v6_ptdins_chl1_with_chl1':{'nranked':10,'resname_filter':['PtdIns','CHL1'],
+			'sns':['membrane-v532'],'barnacles':['CHL1'],'associates':['CHL1']},
+		'v6_ptdins_with_chl1':{'nranked':10,'resname_filter':['PtdIns'],
+			'sns':['membrane-v532'],'barnacles':['CHL1'],'associates':['CHL1']},
+		}
+
+	#---one rendering run per method
+	for method_tag,method in methods.items():
+
+		#---store the snapshots in the post_plot_spot according to the tag
+		tempdir = os.path.join(work.paths['post_plot_spot'],'fig.hydrogen_bonding.%s'%method_tag)
+		#---only make figures if the folder is empty. it only takes a few minutes -- no more coding logic
+		if (os.path.isdir(tempdir) and not overwrite_snaps): 
+			status('found %s and refusing to overwrite'%tempdir)
+			continue
+		try: os.mkdir(tempdir)
+		except: status('directory exists so we are overwriting',tag='warning')
+		status('snapshots dropping to %s'%tempdir,tag='note')
+		if not overwrite_snaps: status('delete the snapshot directory to rebuild them')
+
+		snapshot_catalog = {}
+		#---get the top three hydrogen bonds from each simulation
+		for sn in method.get('sns',work.sns()):
+			bonds,obs,valid_frames = [data['hydrogen_bonding'][sn]['data'][i] 
+				for i in ['bonds','observations','valid_frames']]
+			#---discard atom names
+			bonds_red = bonds[:,np.array([0,1,3,4])]
+			#---this step induces a sort of sorts, so that actually the line where we define the ranking
+			#---...ends up being in order over the mean of the sum of observations
+			bonds_inds,bonds_counts = uniquify(bonds_red)
+			#---subselect lipids and filter out intramolecular bonds
+			lipid_resnames = np.array(work.vars['selectors']['resnames_lipid_chol'])
+			#---further subselection
+			resname_filter = method.get('resname_filter',None)
+			if resname_filter: 
+				lipid_resnames = [l for l in lipid_resnames if l in resname_filter]
+				#---alias "PtdIns" back to the right residue name
+				lipid_resnames = [work.meta[sn]['ptdins_resname'] if l=='PtdIns' 
+					else l for l in resname_filter]
+			nranked = method['nranked']
+			#---perform the selection
+			subsel = np.where(np.all((
+				np.in1d(bonds_red[bonds_inds][:,0],lipid_resnames),
+				np.in1d(bonds_red[bonds_inds][:,2],lipid_resnames),
+				bonds_red[bonds_inds][:,1]!=bonds_red[bonds_inds][:,3]
+				),axis=0))[0]
+			#---having filtered for desired bonds and already uniquified, we find the most common
+			#---...after we map each unique reduced bond back to all of the actual bonds (with atoms)
+			#---note that this step is slow
+			status('slow where loop to map reduced bonds to observations for %s'%sn,tag='compute')
+			map_red_to_obs = [np.where(np.all(bonds_red==i,axis=1))[0] 
+				for i in bonds_red[bonds_inds][subsel]]
+			#---loop over rankings. these are somewhat arbitrary because we have subselected so hard
+			ranking = np.argsort([obs.T[i].sum(axis=0).mean() for i in map_red_to_obs])[::-1]
+			nranked = range(nranked) if type(nranked)==int else nranked
+			for rank_num in nranked:
+				#---now we have the commonest bonds so we can find the most-representative frame
+				#---the ranking is over the map_red_to_obs which indexes the whole list
+				#---...so we consult the whole obs list to get the particular bonds that have the reduced
+				#---...bond and then identify the frame with the max, noting however that many frames
+				#---...will probably have the max since our unique residue-residue bond probably only has
+				#---...a handful of different unique bonds over the atoms
+				fr = np.argmax(obs.T[map_red_to_obs[ranking[rank_num]]].sum(axis=0))
+				#---! wow. where to begin. this frame is wrong and it was really tough to figure out why
+				frame_actual = valid_frames[fr]
+				#---for each of the observed hydrogen bonds at this frame we save instructions to render it
+				#---first we get the handful of bonds that for our resid-resid pair
+				bonds_by_pair = bonds[map_red_to_obs[ranking[rank_num]]][
+					np.where(obs.T[map_red_to_obs[ranking[rank_num]]].sum(axis=1))]
+				#---then at the frame we selected (admittedly probably many frames have a couple bonds)
+				#---...we figure out which of the handful are actually on that frame
+				bonds_in_frame = np.where(obs.T[map_red_to_obs[ranking[rank_num]]].T[fr])
+				bond_spec_keys = 'resname_1 resid_1 name_1 resname_2 resid_2 name_2 name_h'
+				bond_spec = dict(hydrogen_bonds=[
+					dict([(i,bond[ii]) for ii,i in enumerate(bond_spec_keys.split())]) 
+					for bond in bonds_by_pair[bonds_in_frame]])
+				#---construct a description of the lipid pair, first checking that there is only one pair
+				inds,counts = uniquify(bonds_by_pair[bonds_in_frame][:,np.array([0,1,3,4])])
+				if not len(inds)==1: raise Exception('non-unique lipid pairing: %s'%
+					bonds_by_pair[bonds_in_frame])
+				lipid_pair_spec = dict([(i,bonds_by_pair[bonds_in_frame][inds[0]][ii]) 
+					for ii,i in enumerate(bond_spec_keys.split())])
+				#---now that we have all of the instructions we render it		
+				filetag = 'fig.snapshot.%s.fr%d.%s_%s_o%d'%(sn,frame_actual,
+					lipid_pair_spec['resid_1'],lipid_pair_spec['resid_2'],rank_num)
+				render_spec = dict(sn=sn,pair=lipid_pair_spec,frame=frame_actual,tempdir=tempdir,fn=filetag)
+				render_spec.update(**work.get_gmx_sources(sn=sn,calc=calc))
+				render_spec.update(**bond_spec)
+				#---check the lipid distance to see if we are broken across PBCs
+				resids = [np.where(data['lipid_abstractor'][sn]['data']['resids']==int(
+					bond_spec['hydrogen_bonds'][0]['resid_%d'%i]))[0][0] for i in [1,2]]
+				com_distance = data['lipid_abstractor'][sn]['data']['points'][
+					frame_actual][resids].ptp(axis=0)
+				if np.any(com_distance>=data['lipid_abstractor'][sn]['data']['vecs'][frame_actual]/2.):
+					status('lipids are broken over PBCs and this rendering algo cannot work so skipping',
+						tag='warning')
+					continue
+				#---identify the barnacles: lipids nearby that we care about and which also appear in the 
+				#---...listing of hydrogen bonds
+				barnacles = method.get('barnacles',None)
+				if barnacles:
+					this_bond = bonds_by_pair[0]
+					resname_1,resname_2,resid_1,resid_2 = [this_bond[bond_spec_keys.split().index(i)] for i in ['resname_1','resname_2','resid_1','resid_2']]
+					subsel_barnacles = np.where(
+						np.any((
+							np.all((np.in1d(bonds_red[bonds_inds][:,0],[resname_1,resname_2]),np.in1d(bonds_red[bonds_inds][:,1],[resid_1,resid_2]),np.in1d(bonds_red[bonds_inds][:,2],method['barnacles']),),axis=0),
+							np.all((np.in1d(bonds_red[bonds_inds][:,2],[resname_1,resname_2]),np.in1d(bonds_red[bonds_inds][:,3],[resid_1,resid_2]),np.in1d(bonds_red[bonds_inds][:,0],method['barnacles']),),axis=0),
+							),axis=0)
+						)[0]
+					#---only render the bonds if the barnacle has a bond in this frame
+					for subind in subsel_barnacles:
+						if obs.T[bonds_inds][subind][fr]==1.0:
+							bond = bonds[bonds_inds][subind]
+							render_spec['hydrogen_bonds'].append(dict([(i,bond[ii]) 
+								for ii,i in enumerate(bond_spec_keys.split())]))
+				#---check for associates
+				associates = method.get('associates',None)
+				if associates:
+					simplices = data['lipid_mesh'][sn]['data']['0.%d.simplices'%frame_actual]
+					resname_resids = np.transpose((data['lipid_abstractor'][sn]['data']['resnames'],data['lipid_abstractor'][sn]['data']['resids']))
+					#---loop over partners
+					for xxx in [1,4]:
+						#---get resid for the first residue in the pair
+						ind = list(resname_resids[:,1]).index(bonds_by_pair[0][xxx])
+						#---reverse mapping to monolayers
+						#---! note this was extremely hasty
+						indm = np.where(np.where(data['lipid_abstractor'][sn]['data']['monolayer_indices']==0)[0]==ind)[0][0]
+						neighborsm = np.unique(simplices[np.where(np.any(simplices==indm,axis=1))[0]])
+						ghosts = data['lipid_mesh'][sn]['data']['0.%d.ghost_ids'%frame_actual][neighborsm]
+						neighbors = np.where(data['lipid_abstractor'][sn]['data']['monolayer_indices']==0)[0][ghosts]
+						near_neighbors = np.where(np.in1d(data['lipid_abstractor'][sn]['data']['resnames'][neighbors],associates))[0]
+						data['lipid_mesh'][sn]['data'].keys()
+						if len(near_neighbors)>0: render_spec['associates'] = []
+						#---include all nearest neighbors in the visualization
+						for resid in neighbors[near_neighbors]:
+							render_spec['associates'].append(dict(
+								resname=data['lipid_abstractor'][sn]['data']['resnames'][resid],
+								resid=str(data['lipid_abstractor'][sn]['data']['resids'][resid])))
+				#---also identify 
+				render_lipid_pair(**render_spec)
+				status('done rendering simulation %s'%sn,i=rank_num,looplen=len(nranked),tag='render')
+				snapshot_catalog[(sn,rank_num)] = render_spec
+				#if rank_num==3: 
+				#	import ipdb;ipdb.set_trace()

@@ -13,8 +13,10 @@ if is_live:
 	from IPython.display import display
 
 #---block: get the curvature investigation class
+#---! this is pretty much redundant!
 import codes.curvature_coupling.InvestigateCurvature
 codes.curvature_coupling.InvestigateCurvature.plotload = plotload
+codes.curvature_coupling.InvestigateCurvature.plotname = plotname
 codes.curvature_coupling.InvestigateCurvature.work = work
 if 'ic' not in globals(): ic = codes.curvature_coupling.InvestigateCurvature.InvestigateCurvature(mode='plot')
 
@@ -98,3 +100,4 @@ if is_live:
 	slider_theta = widgets.SelectionSlider(options=post.theta_sweep,
 		description='theta',disabled=False,continuous_update=False,readout=True)
 	interact(landscaper,isotropy=slider_isotropy,theta=slider_theta);
+>>>>>>> 7467280eceaa8ba989bf424a168b4681d5645ee7
