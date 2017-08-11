@@ -602,7 +602,7 @@ def marching_cubes(rho):
 	return ii_coor
 
 #--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
-def compute_VRS(ii_point,water_coor):
+def compute_VRS(ii_coor,ii_point,water_coor):
 	def erf(x):
 		sign = 1 if x >= 0 else -1
 		x = abs(x)
@@ -619,6 +619,7 @@ def compute_VRS(ii_point,water_coor):
 	vrs=0
 	SI_unit_conv = 1.084E8*1.602E-19*1E12 				# pV
 	ii_pos = ii_coor[ii_point]
+	n_water = water_coor.shape[0]
 	for i in range(n_water)[::3]:
 		for j in range(3):
 			rvec = water_coor[i+j]-ii_pos
@@ -649,14 +650,12 @@ def compute_refVal(water_coor):
 			vrs += chg[j] * erf(r/sigma) / (r)
 	return vrs
 
-def scale_potential(ii):
+def scale_potential(ii,refVal):
 	return VRS[ii]-refVal
 
 def compute_LREP(ii_coor,water_coor):
 
-	global VRS
 	global chg
-	global n_water
 	global sigma
 
 	sigma = 0.45
@@ -667,18 +666,16 @@ def compute_LREP(ii_coor,water_coor):
 	II = len(ii_coor)
 	VRS = np.zeros(II)
 
-	n_water = water_coor.shape[0]
 	print 'starting parallel job...'
 	### Parallel option: VRS = Parallel(n_jobs=8)(delayed(compute_VRS,has_shareable_memory)(ii_point) for ii_point in range(II)) 
 	for ii in range(II):
-		VRS = compute_VRS(ii)
+		VRS = compute_VRS(ii_coor,ii,water_coor)
 
-	global refVal
 	refVal = compute_refVal(water_coor)
 
 	### Parallel option: LREP = Parallel(n_jobs=8)(delayed(scale_potential,has_shareable_memory)(ii) for ii in range(II))
 	for ii in range(II):
-		LREP = scale_potential(ii)
+		LREP = scale_potential(ii,refVal)
 	return LREP 
 
 def run_emaps(fr):
@@ -708,11 +705,11 @@ def run_emaps(fr):
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	LREP = compute_LREP(ii_coor,water_coor)
+	LREP = compute_LREP(interface_coors,water_coor)
 	LREP_stop = time.time()
-	ii_coor *= scale
+	interface_coors *= scale
 	print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
-	write_pdb(ii_coor,LREP,fr)
+	write_pdb(interface_coors,LREP,fr)
 	return 0
 	
 def electrostatic_map(grofile,trajfile,**kwargs):
