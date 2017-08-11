@@ -28,7 +28,7 @@ if the calculation has already been performed successfully.
 TODO:
 	- set up the code so averages can be computed
 	- figure out if it makes sense to return more data to omnicalc (such as rho)
-	- ?
+	- fix LREP units
 
 """
 
@@ -705,9 +705,10 @@ def run_emaps(fr):
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
+	interface_coors *= scale
+	water_coor *= scale
 	LREP = compute_LREP(interface_coors,water_coor)
 	LREP_stop = time.time()
-	interface_coors *= scale
 	print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
 	write_pdb(interface_coors,LREP,fr)
 	return 0

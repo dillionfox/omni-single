@@ -1,7 +1,8 @@
 collections:
   all:
+    - mk003
     #- mk004
-    - mk005
+    #- mk005
 slices:
   mk001:
     readymade_namd:
@@ -11,7 +12,9 @@ slices:
       current: +slices/mk001
   mk003:
     readymade_namd:
-      current: +slices/mk003
+      current:
+        psf: "1protein_again_autopsf.pdb"
+        dcds: ['bigger_membrane_sample3_wrap.dcd']
   mk004:
     readymade_namd:
       current:
