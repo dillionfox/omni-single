@@ -32,12 +32,18 @@ TODO:
 
 """
 
+av_LREP = 'y'
+
 #--- WRITE OUTPUT
 def write_pdb(coor,beta,fr):
+	"""
+	This function writes the coordinates of the Willard-Chandler instantaneous interface as a pdb,
+	and populates the Beta field with the long-range electrostatic potential
+	"""
+
 	print 'writing pdb...'
 	outfile = open(str(sn)+"_emap_"+str(fr)+".pdb","w")
 	count_zeros = 0
-	print 'this is beta:', beta
 	for i in range(len(coor)):
 		if (coor[i][0]!=0 and coor[i][1]!=0 and coor[i][2]!=0):
 			t1 = "ATOM"					# ATOM
@@ -61,6 +67,10 @@ def write_pdb(coor,beta,fr):
 
 #--- EXTRACT COORDINATES
 def extract_traj_info(PSF,DCD,selection_key):
+	"""
+	This function uses MDAnalysis to extract coordinates from the trajectory
+	"""
+
         print 'loading...'
         # load some variables into global namespace
         global n_heavy_atoms
@@ -101,6 +111,10 @@ def extract_traj_info(PSF,DCD,selection_key):
 
 #--- FUNCTIONS FOR COMPUTING RHO
 def erf(x):
+	"""
+	This is a straight-forward implementation of a Numerical Recipe code for computing the error function
+	"""
+
 	sign = 1 if x >= 0 else -1
 	x = abs(x)
 	a1 =  0.254829592
@@ -113,7 +127,11 @@ def erf(x):
 	y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*np.exp(-x*x)
 	return sign*y # erf(-x) = -erf(x)
 
-def phi(x, sig, cutoff):	# equation 2 in chandler paper
+def phi(x, sig, cutoff):
+	"""
+	Equation 2 from Chandler paper
+	"""
+
 	phic = np.exp(-cutoff*cutoff/(2.0*sig*sig))
 	C = 1.0 / ( (2*np.pi)**(0.5) * sig * erf(cutoff / (2.0**(0.5) * sig)) - 2.0*cutoff*phic )
 	if np.abs(x) <= cutoff:
@@ -123,6 +141,10 @@ def phi(x, sig, cutoff):	# equation 2 in chandler paper
 	return phix
 
 def gaussian_convolution(voxel_i,N,ngrid,pos,grid_spacing,dl,phi_bar):
+	"""
+	Convolve the density field with Gaussians
+	"""
+
 	nx = voxel_i-N			# N = int(cutoff/dL)-xg-1, xg: (0,2*int(cutoff/dL))
 	if nx<0: nx+=ngrid		# wrap around periodic bounds
 	elif nx>=ngrid: nx-=ngrid
@@ -132,6 +154,11 @@ def gaussian_convolution(voxel_i,N,ngrid,pos,grid_spacing,dl,phi_bar):
 	return phix,nx
 
 def compute_coarse_grain_density(pos):
+	"""
+	This function takes the positions of the protein/lipids/whatever and computes the coarse grain
+	density field
+	"""
+
 	print '---> computing coarse grain density...'
 	# load into global namespace
 	global n_grid_pts
@@ -168,6 +195,10 @@ def compute_coarse_grain_density(pos):
 
 #--- FUNCTIONS FOR COMPUTING MARCHING CUBES
 def GridInterp(grid1, grid2, value1, value2, rhoc):
+	"""
+	Part of the Marching Cubes algorithm. Note: This was adapted from a common C code that's floating around...
+	"""
+
 	gridc = np.zeros(3)
 	epsilon = 0.000001 
 
@@ -186,6 +217,13 @@ def GridInterp(grid1, grid2, value1, value2, rhoc):
 	return gridc
 
 def MC_table(gridv, gridp, rhoc, trip):
+	"""
+	Part of the Marching Cubes algorithm. Note: This was adapted from a common C code that's floating around...
+	There are 2^8 = 256 different ways to make a polygon out of vertices of a cube. This table is used to
+	figure out how your surface is slicing through the voxel (3D pixel)
+
+	"""
+
 	edgeTable = [0x0, 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,\
 	0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,\
 	0x190, 0x99 , 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,\
@@ -530,6 +568,11 @@ def MC_table(gridv, gridp, rhoc, trip):
 	return [ntri, trip]
 
 def marching_cubes(rho): 
+	"""
+	Main implementation of the Marching Cubes algorithm. This is used to smooth out the coarse grain
+	density field
+	"""
+
 	print "---> running marching cubes. this might take a while..."
 	# load some more variables into global namespace
 
@@ -604,6 +647,12 @@ def marching_cubes(rho):
 
 #--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
 def compute_VRS(ii_coor,ii_point,water_coor):
+	"""
+	This function computes the electric potential at *an* interface point from (every) water molecule in the
+	system. The electric potential is then weighted by an error function, which gives you the Long-Range
+	Electrostatic Potential
+	"""
+
 	def erf(x):
 		sign = 1 if x >= 0 else -1
 		x = abs(x)
@@ -631,6 +680,11 @@ def compute_VRS(ii_coor,ii_point,water_coor):
 	return vrs*SI_unit_conv
 
 def compute_refVal(water_coor):
+	"""
+	This computes the reference value to subtract from every other point in the system. I arbitrarily chose
+	the origin, but this is in fact a poor choice for many systems.
+	"""
+
 	def erf(x):
 		sign = 1 if x >= 0 else -1
 		x = abs(x)
@@ -653,6 +707,10 @@ def compute_refVal(water_coor):
 	return vrs
 
 def compute_LREP(ii_coor,water_coor):
+	"""
+	This function cycles through *every* interface point, and calls the function that calculates the long-range
+	electrostatic potential at each of those points.
+	"""
 
 	global chg
 	global sigma
@@ -678,7 +736,79 @@ def compute_LREP(ii_coor,water_coor):
 	LREP = [V-refVal for V in VRS]
 	return LREP 
 
+def compute_av_emaps(fr):
+	"""
+	This function takes *an* instantaneous interface and computes the LREP at point on the interface
+	for every frame. i.e. you only have one II frame and you use it in each frame to compute an average 
+	potential
+	"""
+
+	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
+	global water
+	global first_II_coors
+
+	#--- EXTRACT INFO FOR FRAME, FR
+	print 'working on frame', fr+1, ' of', nframes
+	water_coor = water[fr]
+
+	#--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
+	LREP_start = time.time()
+	LREP = compute_LREP(first_II_coors,water_coor)
+	LREP_stop = time.time()
+	print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
+	return LREP
+
+def first_II():
+	"""
+	This function calculates the first instantaneous interface 
+	"""
+
+	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
+	global positions
+
+	#--- EXTRACT INFO FOR FRAME, FR
+	pos=positions[0] 
+	
+	#--- COMPUTE RHO
+	coarse_grain_start = time.time()
+	rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
+	coarse_grain_stop = time.time()
+	print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
+	
+	#--- MARCHING CUBES
+	marching_cubes_start = time.time()
+	interface_coors = marching_cubes(rho) # defines global variables: cube_coor
+	marching_cubes_stop = time.time()
+	print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
+
+	return interface_coors
+
+def run_av_emaps():
+	"""
+	This function calls a function to compute the first instantaneous interface, then uses a parallel scheme to 
+	calculate the LREP at each of those interface points for EVERY frame in the trajectory
+	"""
+
+	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
+	global first_II_coors
+	global nthreads
+	global nframes
+	frames = range(nframes)
+	first_II_coors = first_II()
+	all_LREPs = Parallel(n_jobs=nthreads)(delayed(compute_av_emaps,has_shareable_memory)(fr) for fr in frames)
+	av_LREP = np.zeros(len(all_LREPs[0]))
+	for el in all_LREPS:
+		av_LREP += el
+	av_LREP/=nframes
+	write_pdb(first_II_coors,av_LREP,'av')
+	return [0]
+
 def run_emaps(fr):
+	"""
+	This function takes in a set of II points for each frame and calculates the LREP for each frame using the
+	pertinent set of coordinates.
+	"""
+
 	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
 	global box_shift
 	global scale
@@ -715,6 +845,10 @@ def run_emaps(fr):
 	return 0
 	
 def electrostatic_map(grofile,trajfile,**kwargs):
+	"""
+	This is the MAIN function. It reads in all data and decides which functions should be called to
+	compute either averaged or individual electrostatic maps.
+	"""
 	
 	#--- UNPACK UPSTREAM DATA
 	global sn
@@ -726,7 +860,6 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	global selection_key
 	global water_resname
 	global dL
-
 	if 'selection_key' in kwargs['calc']['specs']['selector']:
 		selection_key = kwargs['calc']['specs']['selector']['selection_key']
 	else: 
@@ -752,6 +885,7 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	global positions
 	global water
 	global nframes
+	global nthreads
 	scale = 10.0
 
 	#--- READ DATA
@@ -760,11 +894,21 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 
 	#--- LOOP THROUGH FRAMES IN TRAJECTORY
 	frames = range(nframes)
+	#--- use max 1 thread per frame
 	if nframes<8:
 		nthreads = nframes
 	else:
 		nthreads = 8
-	check = Parallel(n_jobs=nthreads)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
+
+	#--- user has option to make one electrostatic map that represents the average potential at (1) instantaneous interface
+	#	over the course of the simulation. This is recommended by Remsing & Weeks, but is not always conducive to
+	#	the simulation set up
+	if av_LREP != 'y':
+		check = Parallel(n_jobs=nthreads)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
+	#--- determine (1) instantaneous interface and use those points to calculate the potential at each frame. Then divide
+	# 	by the number of frames
+	else:
+		check = run_av_emaps()
 	
 	#--- PACK UP RESULTS AND SEND BACK TO OMNICALC
 	if all(c == 0 for c in check):
@@ -772,4 +916,3 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 		return attrs,result	
 	else:
 		print "something went wrong..."
-
