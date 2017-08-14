@@ -35,7 +35,7 @@ TODO:
 #--- WRITE OUTPUT
 def write_pdb(coor,beta,fr):
 	print 'writing pdb...'
-	outfile = open("emap_"+str(fr)+".pdb","w")
+	outfile = open(str(sn)+"_emap_"+str(fr)+".pdb","w")
 	count_zeros = 0
 	print 'this is beta:', beta
 	for i in range(len(coor)):
@@ -52,7 +52,7 @@ def write_pdb(coor,beta,fr):
 			t10 = float(coor[i][1])				# Y
 			t11 = float(coor[i][2])				# Z
 			t12 = 0.0					# OCCUPANCY
-			t13 = beta					# TEMPERATURE FACTOR
+			t13 = beta[i]					# TEMPERATURE FACTOR
 			t14 = ""					# ELEMENT SYMBOL
 			t15 = ""					# CHARGE ON ATOM
 			outfile.write("{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}{:2s}\n".format(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10,t11,t12,t13,t14,t15))
@@ -671,11 +671,11 @@ def compute_LREP(ii_coor,water_coor):
 	for ii in range(II):
 		if ii%reminders==0:
 			print 'completed', ii, ' out of', II
-		VRS = compute_VRS(ii_coor,ii,water_coor)
+		VRS[ii] = compute_VRS(ii_coor,ii,water_coor)
 
 	refVal = compute_refVal(water_coor)
 
-	LREP = VRS-refVal
+	LREP = [V-refVal for V in VRS]
 	return LREP 
 
 def run_emaps(fr):
@@ -705,17 +705,19 @@ def run_emaps(fr):
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	interface_coors *= scale
-	water_coor *= scale
+	#interface_coors *= scale
+	#water_coor *= scale
 	LREP = compute_LREP(interface_coors,water_coor)
 	LREP_stop = time.time()
 	print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
+	interface_coors *= scale
 	write_pdb(interface_coors,LREP,fr)
 	return 0
 	
 def electrostatic_map(grofile,trajfile,**kwargs):
 	
 	#--- UNPACK UPSTREAM DATA
+	global sn
 	global work
 	sn = kwargs['sn']
 	work = kwargs['workspace']
@@ -763,8 +765,6 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	else:
 		nthreads = 8
 	check = Parallel(n_jobs=nthreads)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
-	print 'HHHHHHHEEEEEEEEERRRRRRRRRRREEEEEEEEEEEE'
-	print 'check =======', check
 	
 	#--- PACK UP RESULTS AND SEND BACK TO OMNICALC
 	if all(c == 0 for c in check):

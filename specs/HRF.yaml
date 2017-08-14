@@ -1,22 +1,24 @@
 collections:
   all:
     - TAS
+    - TRG
+    - GOL
 slices:
   TAS:
     readymade_namd:
       current:
         psf: "TAS.pdb"
         dcds: ['TAS.dcd']
-  mk002:
+  TRG:
     readymade_namd:
       current:
-        psf: "1protein_again_autopsf.pdb"
-        dcds: ['bigger_membrane_sample3_wrap.dcd']
-  mk003:
+        psf: "TRG.pdb"
+        dcds: ['TRG.dcd']
+  GOL:
     readymade_namd:
       current:
-        psf: "1protein_again_autopsf.pdb"
-        dcds: ['bigger_membrane_sample3_wrap.dcd']
+        psf: "GOL.pdb"
+        dcds: ['GOL.dcd']
   mk004:
     readymade_namd:
       current:
@@ -36,7 +38,7 @@ calculations:
     specs:
       writepdb: 'y'
       selector:
-        selection_key: "resname TAS"
+        selection_key: "resname TAS GLB GLY TRG GOL"
         water_resname: "resname TIP3"
         grid_spacing: 0.1
 variables:
@@ -52,14 +54,14 @@ variables:
     #    dcds: ['test0000.dcd','test0001.dcd','test0002.dcd','test0003.dcd','test0004.dcd']
 meta:
   short_namer: "lambda s, spot : ('v'+re.match('^simulation-v(\\d+)',s).group(1) if re.match('^simulation-v(\\d+)',s) else s)"
-  mk001: 
+  TAS: 
     label: "Taurine"
     nprots: 1
-  mk002: 
-    label: "v2"
+  TRG: 
+    label: "Trigonelline"
     nprots: 1
-  mk003: 
-    label: "long simulation"
+  GOL: 
+    label: "Glycerol"
     nprots: 1
   mk004: 
     label: "87 frames"
