@@ -37,6 +37,7 @@ def write_pdb(coor,beta,fr):
 	print 'writing pdb...'
 	outfile = open("emap_"+str(fr)+".pdb","w")
 	count_zeros = 0
+	print 'this is beta:', beta
 	for i in range(len(coor)):
 		if (coor[i][0]!=0 and coor[i][1]!=0 and coor[i][2]!=0):
 			t1 = "ATOM"					# ATOM
@@ -51,7 +52,7 @@ def write_pdb(coor,beta,fr):
 			t10 = float(coor[i][1])				# Y
 			t11 = float(coor[i][2])				# Z
 			t12 = 0.0					# OCCUPANCY
-			t13 = beta[i]					# TEMPERATURE FACTOR
+			t13 = beta					# TEMPERATURE FACTOR
 			t14 = ""					# ELEMENT SYMBOL
 			t15 = ""					# CHARGE ON ATOM
 			outfile.write("{:6s}{:5d} {:^4s}{:1s}{:3s} {:1s}{:4d}{:1s}   {:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}{:2s}\n".format(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10,t11,t12,t13,t14,t15))
@@ -651,9 +652,6 @@ def compute_refVal(water_coor):
 			vrs += chg[j] * erf(r/sigma) / (r)
 	return vrs
 
-def scale_potential(ii,refVal):
-	return VRS[ii]-refVal
-
 def compute_LREP(ii_coor,water_coor):
 
 	global chg
@@ -669,14 +667,15 @@ def compute_LREP(ii_coor,water_coor):
 
 	print 'starting parallel job...'
 	### Parallel option: VRS = Parallel(n_jobs=8)(delayed(compute_VRS,has_shareable_memory)(ii_point) for ii_point in range(II)) 
+	reminders = int(II/20)
 	for ii in range(II):
+		if ii%reminders==0:
+			print 'completed', ii, ' out of', II
 		VRS = compute_VRS(ii_coor,ii,water_coor)
 
 	refVal = compute_refVal(water_coor)
 
-	### Parallel option: LREP = Parallel(n_jobs=8)(delayed(scale_potential,has_shareable_memory)(ii) for ii in range(II))
-	for ii in range(II):
-		LREP = scale_potential(ii,refVal)
+	LREP = VRS-refVal
 	return LREP 
 
 def run_emaps(fr):
@@ -759,14 +758,18 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 
 	#--- LOOP THROUGH FRAMES IN TRAJECTORY
 	frames = range(nframes)
-	check = Parallel(n_jobs=8)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
+	if nframes<8:
+		nthreads = nframes
+	else:
+		nthreads = 8
+	check = Parallel(n_jobs=nthreads)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
+	print 'HHHHHHHEEEEEEEEERRRRRRRRRRREEEEEEEEEEEE'
+	print 'check =======', check
 	
 	#--- PACK UP RESULTS AND SEND BACK TO OMNICALC
-	if check == 0:
+	if all(c == 0 for c in check):
 		attrs,result = {},{}
-		result['done'] = np.array(['y']) # data has to be a numpy array
-		return result,attrs	
+		return attrs,result	
 	else:
 		print "something went wrong..."
-		return 0
 
