@@ -35,8 +35,9 @@ TODO:
 #--- WRITE OUTPUT
 def write_pdb(coor,beta,fr):
 	print 'writing pdb...'
-	outfile = open("emap_"+str(fr)+".pdb","w")
+	outfile = open(str(sn)+"_emap_"+str(fr)+".pdb","w")
 	count_zeros = 0
+	print 'this is beta:', beta
 	for i in range(len(coor)):
 		if (coor[i][0]!=0 and coor[i][1]!=0 and coor[i][2]!=0):
 			t1 = "ATOM"					# ATOM
@@ -651,9 +652,6 @@ def compute_refVal(water_coor):
 			vrs += chg[j] * erf(r/sigma) / (r)
 	return vrs
 
-def scale_potential(ii,refVal):
-	return VRS[ii]-refVal
-
 def compute_LREP(ii_coor,water_coor):
 
 	global chg
@@ -669,14 +667,15 @@ def compute_LREP(ii_coor,water_coor):
 
 	print 'starting parallel job...'
 	### Parallel option: VRS = Parallel(n_jobs=8)(delayed(compute_VRS,has_shareable_memory)(ii_point) for ii_point in range(II)) 
+	reminders = int(II/20)
 	for ii in range(II):
-		VRS = compute_VRS(ii_coor,ii,water_coor)
+		if ii%reminders==0:
+			print 'completed', ii, ' out of', II
+		VRS[ii] = compute_VRS(ii_coor,ii,water_coor)
 
 	refVal = compute_refVal(water_coor)
 
-	### Parallel option: LREP = Parallel(n_jobs=8)(delayed(scale_potential,has_shareable_memory)(ii) for ii in range(II))
-	for ii in range(II):
-		LREP = scale_potential(ii,refVal)
+	LREP = [V-refVal for V in VRS]
 	return LREP 
 
 def run_emaps(fr):
@@ -706,17 +705,19 @@ def run_emaps(fr):
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	interface_coors *= scale
-	water_coor *= scale
+	#interface_coors *= scale
+	#water_coor *= scale
 	LREP = compute_LREP(interface_coors,water_coor)
 	LREP_stop = time.time()
 	print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
+	interface_coors *= scale
 	write_pdb(interface_coors,LREP,fr)
 	return 0
 	
 def electrostatic_map(grofile,trajfile,**kwargs):
 	
 	#--- UNPACK UPSTREAM DATA
+	global sn
 	global work
 	sn = kwargs['sn']
 	work = kwargs['workspace']
@@ -759,14 +760,16 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 
 	#--- LOOP THROUGH FRAMES IN TRAJECTORY
 	frames = range(nframes)
-	check = Parallel(n_jobs=8)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
+	if nframes<8:
+		nthreads = nframes
+	else:
+		nthreads = 8
+	check = Parallel(n_jobs=nthreads)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
 	
 	#--- PACK UP RESULTS AND SEND BACK TO OMNICALC
-	if check == 0:
+	if all(c == 0 for c in check):
 		attrs,result = {},{}
-		result['done'] = np.array(['y']) # data has to be a numpy array
-		return result,attrs	
+		return attrs,result	
 	else:
 		print "something went wrong..."
-		return 0
 
