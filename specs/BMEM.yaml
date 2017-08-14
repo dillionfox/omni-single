@@ -1,6 +1,7 @@
 collections:
   all:
-    - mk003
+    - mk002
+    #- mk003
     #- mk004
     #- mk005
 slices:
@@ -9,7 +10,9 @@ slices:
       current: +slices/mk001
   mk002:
     readymade_namd:
-      current: +slices/mk001
+      current:
+        psf: "smaller_membrane.pdb"
+        dcds: ['smaller_membrane_wrapped.dcd']
   mk003:
     readymade_namd:
       current:
@@ -19,7 +22,7 @@ slices:
     readymade_namd:
       current:
         psf: "1protein_again_autopsf.pdb"
-        dcds: ['sample3.dcd']
+        dcds: ['bigger_membrane.dcd']
   mk005:
     readymade_namd:
       current:
@@ -95,7 +98,8 @@ calculations:
     group: all
     collections: all
     specs:
-      selector: resnames_lipid
+      selector:
+        distance_cutoff: 2.0
   curvature_undulation_coupling:
     uptype: post
     group: all
@@ -113,14 +117,6 @@ calculations:
         loader_protein:
           module: codes.curvature_coupling_loader
           function: curvature_coupling_loader_protein
-        #loader_protein: 
-        #  module: codes.contacts_curvature_coupling
-        #  function: curvature_coupling_loader_protein
-        #  #function: contacts_protein_loader
-        #loader: 
-        #  module: codes.contacts_curvature_coupling
-        #  function: curvature_coupling_loader_membrane
-        #  #function: contacts_membrane_loader
         style: wilderness
         curvature_positions: 
           method: neighborhood
@@ -133,17 +129,17 @@ calculations:
               - 2.5
               - 1.0
         curvature_sum: mean
-  #electrostatic_map:
-  #  uptype: simulation
-  #  slice_name: current
-  #  group: all
-  #  collections: all
-  #  specs:
-  #    writepdb: 'y'
-  #    selector:
-  #      selection_key: "resname POPC"
-  #      water_resname: "resname TIP3"
-  #      grid_spacing: 0.2
+  electrostatic_map:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      selector:
+        selection_key: "resname POPC"
+        water_resname: "resname TIP3"
+        grid_spacing: 0.2
 variables:
   #---protected
   art_director: art_ocean.py

@@ -1,20 +1,24 @@
 #!/usr/bin/python
 
 import time
-from numpy import *
+import numpy as np
 import MDAnalysis
 from joblib import Parallel,delayed
 from joblib.pool import has_shareable_memory
+from base.tools import status,framelooper
+from base.timer import checktime
+import codes.mesh
 
 def run_contacts(fr):
 	global cutoff
 	global uni
 	global resids_per_frame
+	global resnames_lipid
 
+	print "frame:", fr
 	uni.trajectory[fr]
 	protein = uni.select_atoms('global protein')
-	#selstring = 'around ' + str(cutoff) +  ' global resname POPC or resname DOPC or resname POPE'
-	selstring = 'around ' + str(cutoff) +  ' global '+ resnames_lipid
+	selstring = 'around ' + str(cutoff) +  ' global resname POPC or resname DOPC or resname POPE'
 	contacts = protein.select_atoms(selstring)
 
 	reslist = contacts.residues.resids
@@ -38,12 +42,6 @@ def protein_lipid_contacts(grofile,trajfile,**kwargs):
 	global resids_per_frame
 	global resnames_lipid
 
-	if 'resnames_lipid' in kwargs['calc']['specs']['selector']:
-		resnames_lipid = kwargs['calc']['specs']['selector']['resnames_lipid']
-	else: 
-		print 'did not provide lipid resnames in yaml file. Using resnames_lipid = resname POPC or resname DOPC or resname POPE'
-		resnames_lipid = "resnames_lipid = resname POPC or resname DOPC or resname POPE"
-
 	if 'distance_cutoff' in kwargs['calc']['specs']['selector']:
 		cutoff = kwargs['calc']['specs']['selector']['distance_cutoff']
 	else: 
@@ -58,11 +56,14 @@ def protein_lipid_contacts(grofile,trajfile,**kwargs):
 	nframes = len(uni.trajectory)
 	protein = uni.select_atoms('protein')
 	nres = len(protein.residues)
-	resids_per_frame = zeros((nframes,nres))
+	resids_per_frame = np.zeros((nframes,nres))
 
 	contact_frames = np.zeros(nframes)
 	start = time.time()
-	contact_frames = Parallel(n_jobs=8)(delayed(run_contacts,has_shareable_memory)(fr) for fr in range(nframes))
+	for fr in range(nframes):
+		run_contacts(fr)
+
+	#contact_frames = Parallel(n_jobs=8)(delayed(run_contacts,has_shareable_memory)(fr) for fr in range(nframes))
 	#for fr in range(nframes):
 	#	uni.trajectory[fr]
 	#	protein = uni.select_atoms('global protein')
@@ -80,7 +81,7 @@ def protein_lipid_contacts(grofile,trajfile,**kwargs):
 
 	#---pack
 	attrs,result = {},{}
-	result['frames'] = array(contact_frames) # contacts has to be a numpy array
+	result['frames'] = np.array(contact_frames) # contacts has to be a numpy array
 	result['resids_per_frames'] = resids_per_frame
 	return result,attrs	
 

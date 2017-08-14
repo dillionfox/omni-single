@@ -644,6 +644,7 @@ def compute_refVal(water_coor):
 		return sign*y
 
 	vrs=0
+	n_water = water_coor.shape[0]
 	for i in range(n_water)[::3]:
 		for j in range(3):
 			r = np.sqrt(np.dot(water_coor[i+j],water_coor[i+j]))
