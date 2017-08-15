@@ -37,10 +37,13 @@ calculations:
     collections: all
     specs:
       writepdb: 'y'
+      verbose: 1
+      average_frames: 'n'
+      name_modifier: 'mol'
       selector:
         selection_key: "resname TAS GLB GLY TRG GOL"
         water_resname: "resname TIP3"
-        grid_spacing: 0.1
+        grid_spacing: 1.0
 variables:
   #---protected
   art_director: art_ocean.py

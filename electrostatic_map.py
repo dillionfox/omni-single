@@ -21,8 +21,7 @@ then calculates the LREP at each point on the II.
 
 OUTPUT: 
 - .pdb file for each frame containing instantaneous interface points. The beta value
-for each point represents the strength of the long range electrostatic potential. Right now
-the units are messed up (off by a factor of either 10 or 1/10). 
+for each point represents the strength of the long range electrostatic potential (SI units)
 - There doesn't seem to be a point in returning all of this data back to omnicalc,
 so right now I'm just having it return 'y' so omnicalc knows it can skip this
 if the calculation has already been performed successfully.
@@ -30,8 +29,8 @@ if the calculation has already been performed successfully.
 NOTES:
 Remsing and Weeks recommend averaging the electrostatic potential over many frames. This is
 one of the options. It is highly recommended that the user chooses the grid spacing to be
-0.1, but for very large systems (such as lipid bilayers) it is sometimes acceptable to use
-0.2. Since there are 3 dimensions, increasing the grid spacing by a factor of 2 makes the 
+1, but for very large systems (such as lipid bilayers) it is sometimes acceptable to use
+2. Since there are 3 dimensions, increasing the grid spacing by a factor of 2 makes the 
 code 8x faster.
 
 TESTING:
@@ -116,12 +115,12 @@ def extract_traj_info(PSF,DCD,selection_key):
 
         	protein = uni.select_atoms(selection_key)		# identify atoms to build interface around
         	heavy_atoms = protein.select_atoms('not name H*')	# Only need to consider heavy atoms
-		positions[fr] = heavy_atoms.positions/scale
+		positions[fr] = heavy_atoms.positions
 
         	water = uni.select_atoms("resname TIP3")		# identify atoms to build interface around
-		water_pos[fr] = water.positions/scale
+		water_pos[fr] = water.positions
 
-        pbc = uni.dimensions[0:3]/scale					# retrieve periodic bounds
+        pbc = uni.dimensions[0:3]					# retrieve periodic bounds
         return [nframes,positions,water_pos]
 
 #--- FUNCTIONS FOR COMPUTING RHO
@@ -182,15 +181,13 @@ def compute_coarse_grain_density(pos):
 	global grid_spacing
 
 	nconf = 1							# number of conformations to consider
-	rho_pro = 50.0							# bulk density of protein
-
-	cutoff = 0.7 							# cutoff for Gaussian (for convolution)
-	dl = 0.01							# grid spacing for coarse grain density
+	rho_pro = 0.05							# bulk density of protein
+	cutoff = 7 							# cutoff for Gaussian (for convolution)
+	dl = 0.1							# grid spacing for coarse grain density
 	npoints = int(cutoff/dl)+1					# number of density points
-	sigp = 0.24 							# width of Gaussian smoothing: protein
+	sigp = 2.4 							# width of Gaussian smoothing: protein
 	phi_bar_p = [phi(i*dl, sigp, cutoff) for i in range(npoints*2)]	# coarse grain density
-
-	Ninc = int(cutoff/dL)						# ~!~~~still not sure what this is~~~!~
+	Ninc = int(cutoff/dL)						# number of density points
 
 	# define voxels
 	n_grid_pts = [int(p/dL) for p in pbc]				# number of bins that naturally fit along each axis
@@ -736,7 +733,7 @@ def compute_LREP(ii_coor,water_coor):
 	global chg
 	global sigma
 
-	sigma = 0.45
+	sigma = 4.5
 	npro = n_heavy_atoms
 	nconf = 1.0
 	chg = [-0.834, 0.417, 0.417]	
@@ -840,7 +837,6 @@ def run_emaps(fr):
 
 	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
 	global box_shift
-	global scale
 	global positions
 	global water
 	global nframes
@@ -867,13 +863,10 @@ def run_emaps(fr):
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	#interface_coors *= scale
-	#water_coor *= scale
 	LREP = compute_LREP(interface_coors,water_coor)
 	LREP_stop = time.time()
 	if verbose >= 2:
 		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
-	interface_coors *= scale
 	write_pdb(interface_coors,LREP,fr)
 	return 0
 	
@@ -888,10 +881,6 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	global work
 	sn = kwargs['sn']
 	work = kwargs['workspace']
-
-	print work.postdir
-	outfile = open(str(work.postdir)+str(sn)+"_emap_"+str(fr)+str(name_modifier)+".pdb","w")
-	exit()
 
 	#--- READ IN PARAMETERS FROM YAML FILE
 	global selection_key
@@ -913,9 +902,13 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 
 	if 'grid_spacing' in kwargs['calc']['specs']['selector']:
 		dL = kwargs['calc']['specs']['selector']['grid_spacing']
-	else: dL = 0.1 
+		if dL > 1:
+			print "you are using a grid spacing of:", dL, ". The recommended value is 1.0. This may cause issues."
+		if dL < 1:
+			print "you are using a grid spacing of:", dL, ". The recommended value is 1.0. You can probably increase this to save time."
+	else: dL = 1 
 
-	if 'name_modifer' in kwargs['calc']['specs']:
+	if 'name_modifier' in kwargs['calc']['specs']:
 		name_modifier = "_" + str(kwargs['calc']['specs']['name_modifier'])
 	else: name_modifier = ""
 
@@ -928,17 +921,15 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	else: writepdb = 'n'
 
 	if 'average_frames' in kwargs['calc']['specs']:
-		av_LREP = 'y'
+		av_LREP = kwargs['calc']['specs']['average_frames']
 	else: av_LREP = 'n'
 
 	#--- LOAD VARIABLES INTO GLOBAL NAMESPACE
 	global box_shift
-	global scale
 	global positions
 	global water
 	global nframes
 	global nthreads
-	scale = 10.0
 
 	#--- READ DATA
 	[nframes, positions, water] = extract_traj_info(grofile,trajfile,selection_key)
