@@ -136,6 +136,7 @@ calculations:
     collections: all
     specs:
       writepdb: 'y'
+      average_frames: 'y'
       selector:
         selection_key: "resname POPC"
         water_resname: "resname TIP3"
