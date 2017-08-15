@@ -44,8 +44,6 @@ half an hour per frame.
 
 """
 
-av_LREP = 'y'
-
 #--- WRITE OUTPUT
 def write_pdb(coor,beta,fr):
 	"""
@@ -890,6 +888,9 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	if 'writepdb' in kwargs['calc']['specs']:
 		writepdb = 'y'
 	else: writepdb = 'n'
+	if 'average_frames' in kwargs['calc']['specs']:
+		av_LREP = 'y'
+	else: av_LREP = 'n'
 
 	#--- LOAD VARIABLES INTO GLOBAL NAMESPACE
 	global box_shift
