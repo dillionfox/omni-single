@@ -136,9 +136,9 @@ calculations:
     collections: all
     specs:
       writepdb: 'y'
-      average_frames: 'y'
+      average_frames: 'n'
       selector:
-        selection_key: "resname POPC"
+        selection_key: "resname POPC or resname DOPC or resname DOPS or resname PIP2"
         water_resname: "resname TIP3"
         grid_spacing: 0.2
 variables:
