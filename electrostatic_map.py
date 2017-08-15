@@ -50,9 +50,12 @@ def write_pdb(coor,beta,fr):
 	This function writes the coordinates of the Willard-Chandler instantaneous interface as a pdb,
 	and populates the Beta field with the long-range electrostatic potential
 	"""
+	global name_modifier
+	global verbose
 
-	print 'writing pdb...'
-	outfile = open(str(sn)+"_emap_"+str(fr)+".pdb","w")
+	if verbose >= 1:
+		print 'writing pdb...'
+	outfile = open(str(work.postdir)+str(sn)+"_emap_"+str(fr)+str(name_modifier)+".pdb","w")
 	count_zeros = 0
 	for i in range(len(coor)):
 		if (coor[i][0]!=0 and coor[i][1]!=0 and coor[i][2]!=0):
@@ -80,8 +83,10 @@ def extract_traj_info(PSF,DCD,selection_key):
 	"""
 	This function uses MDAnalysis to extract coordinates from the trajectory
 	"""
+	global verbose
 
-        print 'loading...'
+	if verbose >= 1:
+        	print 'loading coordinates...'
         # load some variables into global namespace
         global n_heavy_atoms
         global pbc
@@ -168,8 +173,10 @@ def compute_coarse_grain_density(pos):
 	This function takes the positions of the protein/lipids/whatever and computes the coarse grain
 	density field
 	"""
+	global verbose
 
-	print '---> computing coarse grain density...'
+	if verbose >= 1:
+		print '---> computing coarse grain density...'
 	# load into global namespace
 	global n_grid_pts
 	global grid_spacing
@@ -582,8 +589,10 @@ def marching_cubes(rho):
 	Main implementation of the Marching Cubes algorithm. This is used to smooth out the coarse grain
 	density field
 	"""
+	global verbose
 
-	print "---> running marching cubes. this might take a while..."
+	if verbose >= 1:
+		print "---> running marching cubes. this might take a while..."
 	# load some more variables into global namespace
 
 	II = 1
@@ -652,7 +661,8 @@ def marching_cubes(rho):
                                                 elif vertexflag == 1:
                                                         break
 		stop_1 = time.time()
-		print i, "/", n_grid_pts[0]
+		if verbose >= 3:
+			print i, "/", n_grid_pts[0]
 	return ii_coor
 
 #--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
@@ -721,6 +731,7 @@ def compute_LREP(ii_coor,water_coor):
 	This function cycles through *every* interface point, and calls the function that calculates the long-range
 	electrostatic potential at each of those points.
 	"""
+	global verbose
 
 	global chg
 	global sigma
@@ -733,11 +744,12 @@ def compute_LREP(ii_coor,water_coor):
 	II = len(ii_coor)
 	VRS = np.zeros(II)
 
-	print 'starting parallel job...'
+	if verbose >= 1:
+		print 'starting parallel job...'
 	### Parallel option: VRS = Parallel(n_jobs=8)(delayed(compute_VRS,has_shareable_memory)(ii_point) for ii_point in range(II)) 
 	reminders = int(II/20)
 	for ii in range(II):
-		if ii%reminders==0:
+		if ii%reminders == 0 and verbose >= 3:
 			print 'completed', ii, ' out of', II
 		VRS[ii] = compute_VRS(ii_coor,ii,water_coor)
 
@@ -752,26 +764,30 @@ def compute_av_emaps(fr):
 	for every frame. i.e. you only have one II frame and you use it in each frame to compute an average 
 	potential
 	"""
+	global verbose
 
 	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
 	global water
 	global first_II_coors
 
 	#--- EXTRACT INFO FOR FRAME, FR
-	print 'working on frame', fr+1, ' of', nframes
+	if verbose >= 3:
+		print 'working on frame', fr+1, ' of', nframes
 	water_coor = water[fr]
 
 	#--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
 	LREP = compute_LREP(first_II_coors,water_coor)
 	LREP_stop = time.time()
-	print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
+	if verbose >= 2:
+		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
 	return LREP
 
 def first_II():
 	"""
 	This function calculates the first instantaneous interface 
 	"""
+	global verbose
 
 	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
 	global positions
@@ -783,13 +799,15 @@ def first_II():
 	coarse_grain_start = time.time()
 	rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
 	coarse_grain_stop = time.time()
-	print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
+	if verbose >= 2:
+		print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
 	
 	#--- MARCHING CUBES
 	marching_cubes_start = time.time()
 	interface_coors = marching_cubes(rho) # defines global variables: cube_coor
 	marching_cubes_stop = time.time()
-	print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
+	if verbose >= 2:
+		print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
 
 	return interface_coors
 
@@ -818,6 +836,7 @@ def run_emaps(fr):
 	This function takes in a set of II points for each frame and calculates the LREP for each frame using the
 	pertinent set of coordinates.
 	"""
+	global verbose
 
 	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
 	global box_shift
@@ -827,7 +846,8 @@ def run_emaps(fr):
 	global nframes
 
 	#--- EXTRACT INFO FOR FRAME, FR
-	print 'working on frame', fr+1, ' of', nframes
+	if verbose >= 3:
+		print 'working on frame', fr+1, ' of', nframes
 	pos=positions[fr] 
 	water_coor = water[fr]
 	
@@ -835,13 +855,15 @@ def run_emaps(fr):
 	coarse_grain_start = time.time()
 	rho = compute_coarse_grain_density(pos) # defines global variables: n_grid_pts, grid_spacing
 	coarse_grain_stop = time.time()
-	print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
+	if verbose >= 2:
+		print 'elapsed time to compute coarse grain density:', coarse_grain_stop-coarse_grain_start
 	
 	#--- MARCHING CUBES
 	marching_cubes_start = time.time()
 	interface_coors = marching_cubes(rho) # defines global variables: cube_coor
 	marching_cubes_stop = time.time()
-	print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
+	if verbose >= 2:
+		print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
@@ -849,7 +871,8 @@ def run_emaps(fr):
 	#water_coor *= scale
 	LREP = compute_LREP(interface_coors,water_coor)
 	LREP_stop = time.time()
-	print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
+	if verbose >= 2:
+		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
 	interface_coors *= scale
 	write_pdb(interface_coors,LREP,fr)
 	return 0
@@ -866,10 +889,16 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	sn = kwargs['sn']
 	work = kwargs['workspace']
 
+	print work.postdir
+	outfile = open(str(work.postdir)+str(sn)+"_emap_"+str(fr)+str(name_modifier)+".pdb","w")
+	exit()
+
 	#--- READ IN PARAMETERS FROM YAML FILE
 	global selection_key
 	global water_resname
 	global dL
+	global name_modifier
+	global verbose
 	if 'selection_key' in kwargs['calc']['specs']['selector']:
 		selection_key = kwargs['calc']['specs']['selector']['selection_key']
 	else: 
@@ -885,9 +914,19 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	if 'grid_spacing' in kwargs['calc']['specs']['selector']:
 		dL = kwargs['calc']['specs']['selector']['grid_spacing']
 	else: dL = 0.1 
+
+	if 'name_modifer' in kwargs['calc']['specs']:
+		name_modifier = "_" + str(kwargs['calc']['specs']['name_modifier'])
+	else: name_modifier = ""
+
+	if 'verbose' in kwargs['calc']['specs']:
+		verbose = kwargs['calc']['specs']['verbose']
+	else: verbose = 1
+
 	if 'writepdb' in kwargs['calc']['specs']:
 		writepdb = 'y'
 	else: writepdb = 'n'
+
 	if 'average_frames' in kwargs['calc']['specs']:
 		av_LREP = 'y'
 	else: av_LREP = 'n'
