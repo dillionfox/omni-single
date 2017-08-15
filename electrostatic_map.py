@@ -6,29 +6,41 @@ import time
 import MDAnalysis
 
 """
-ELECTROSTATIC MAPPING
+ELECTROSTATIC MAPPING:
+is a procedure described by R. Remsing and J. Weeks (2014) that computes the long-ranged
+electrostatic potential (LREP) at discrete points at an interface. The potential calculation
+must be computed at each point on the interface and considers every water molecule in the
+simulation, i.e. there is no long range cutoff. The value of the potential can then be 
+interpretted as the collective polarization of water at that point in space.
 
-WILLARD-CHANDLER INSTANTANEOUS INTERFACE
-Computes the instantaneous interface between liquid-liquid boundaries
-!! still in testing phase !!
+This code is broken up into roughly two parts. First, you have to determine an interface
+between your protein/membrane/whatever and the water. There's a paper by Chandler and Willard
+that describes what they call Instantaneous Interfaces (II) that satisfies this requirement.
+The first part of the code determines the interfaces for every frame (or just one frame), and
+then calculates the LREP at each point on the II.
 
-OUTPUT: pdb file for each frame containing instantaneous interface points. The beta value
+OUTPUT: 
+- .pdb file for each frame containing instantaneous interface points. The beta value
 for each point represents the strength of the long range electrostatic potential. Right now
 the units are messed up (off by a factor of either 10 or 1/10). 
-
-Remsing and Weeks recommend averaging the electrostatic potential over many frames. This code is not
-currently set up to do this, but it is on the list of things to do
-
-There doesn't seem to be a point in returning all of this data back to omnicalc,
+- There doesn't seem to be a point in returning all of this data back to omnicalc,
 so right now I'm just having it return 'y' so omnicalc knows it can skip this
 if the calculation has already been performed successfully.
-"""
 
-"""
-TODO:
-	- set up the code so averages can be computed
-	- figure out if it makes sense to return more data to omnicalc (such as rho)
-	- fix LREP units
+NOTES:
+Remsing and Weeks recommend averaging the electrostatic potential over many frames. This is
+one of the options. It is highly recommended that the user chooses the grid spacing to be
+0.1, but for very large systems (such as lipid bilayers) it is sometimes acceptable to use
+0.2. Since there are 3 dimensions, increasing the grid spacing by a factor of 2 makes the 
+code 8x faster.
+
+TESTING:
+I've tested this on a few systems and found that it does not scale well. The largest system
+I was patient enough to test on contained 110,000 atoms and was made up of lipids, a small 
+protein, and water. The instantaneous interface was determined in a matter of a few minutes
+for each frame, but the electrostatic mapping procedure took about 3.5 hours. Since the code is
+parallelized, it actually spat out 8 electrostatic maps every 3.5 hours, so on average it took about
+half an hour per frame. 
 
 """
 
@@ -797,7 +809,7 @@ def run_av_emaps():
 	first_II_coors = first_II()
 	all_LREPs = Parallel(n_jobs=nthreads)(delayed(compute_av_emaps,has_shareable_memory)(fr) for fr in frames)
 	av_LREP = np.zeros(len(all_LREPs[0]))
-	for el in all_LREPS:
+	for el in all_LREPs:
 		av_LREP += el
 	av_LREP/=nframes
 	write_pdb(first_II_coors,av_LREP,'av')
