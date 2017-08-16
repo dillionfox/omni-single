@@ -916,6 +916,11 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 		verbose = kwargs['calc']['specs']['verbose']
 	else: verbose = 1
 
+	if 'nthreads' in kwargs['calc']['specs']:
+		nthreads = kwargs['calc']['specs']['nthreads']
+	else:
+		nthreads = 8
+
 	if 'writepdb' in kwargs['calc']['specs']:
 		writepdb = 'y'
 	else: writepdb = 'n'
@@ -935,13 +940,12 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	[nframes, positions, water] = extract_traj_info(grofile,trajfile,selection_key)
 			# defines global variables: n_heavy_atoms, pbc
 
+	#--- adjust number of threads so there aren't more threads than frames
+	if nthreads > nframes:
+		nthreads = nframes
+
 	#--- LOOP THROUGH FRAMES IN TRAJECTORY
 	frames = range(nframes)
-	#--- use max 1 thread per frame
-	if nframes<8:
-		nthreads = nframes
-	else:
-		nthreads = 8
 
 	#--- user has option to make one electrostatic map that represents the average potential at (1) instantaneous interface
 	#	over the course of the simulation. This is recommended by Remsing & Weeks, but is not always conducive to
