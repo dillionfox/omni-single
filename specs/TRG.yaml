@@ -1,0 +1,34 @@
+collections:
+  all:
+    - TRG_GOL_bulk
+slices:
+  TRG_GOL_bulk:
+    readymade_namd:
+      current:
+        psf: "bulk_TRG_GOL/2copies_autopsf.pdb"
+        dcds: ['bulk_TRG_GOL/TRG_GOL_first-50000_last-130000.dcd']
+calculations:
+  electrostatic_map:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      verbose: 3
+      average_frames: 'n'
+      name_modifier: 'mol'
+      nthreads: 7
+      selector:
+        selection_key: "resname GOL"
+        water_resname: "resname TIP3"
+        grid_spacing: 1.0
+variables:
+  #---protected
+  art_director: art_ocean.py
+  #---unprotected
+meta:
+  short_namer: "lambda s, spot : ('v'+re.match('^simulation-v(\\d+)',s).group(1) if re.match('^simulation-v(\\d+)',s) else s)"
+  TRG_GOL_bulk: 
+    label: "TRG_GOL"
+    nprots: 1

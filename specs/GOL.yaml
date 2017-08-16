@@ -1,0 +1,144 @@
+collections:
+  all:
+    #- TAS
+    #- TRG
+    #- GOL
+    - GOL_bulk
+slices:
+  GOL_bulk:
+    readymade_namd:
+      current:
+        psf: "bulk_GOL/solvate.pdb"
+        dcds: ['bulk_GOL/GOL_first-50000_last-130000.dcd']
+calculations:
+  electrostatic_map:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      verbose: 3
+      average_frames: 'n'
+      name_modifier: 'mol'
+      nthreads: 7
+      selector:
+        selection_key: "resname GOL"
+        water_resname: "resname TIP3"
+        grid_spacing: 1.0
+variables:
+  #---protected
+  art_director: art_ocean.py
+  #---unprotected
+  selectors:
+    protein_selection: (name BB or name SC1 or name SC2 or name SC3 or name SC4 or name SC5)
+    resnames_lipid: ['DOPC','DOPS','PIP2','POPC']
+  #slices:
+    #mk001:
+    #    psf: "1protein_again_autopsf.psf"
+    #    dcds: ['test0000.dcd','test0001.dcd','test0002.dcd','test0003.dcd','test0004.dcd']
+meta:
+  short_namer: "lambda s, spot : ('v'+re.match('^simulation-v(\\d+)',s).group(1) if re.match('^simulation-v(\\d+)',s) else s)"
+  TAS: 
+    label: "Taurine"
+    nprots: 1
+  TRG: 
+    label: "Trigonelline"
+    nprots: 1
+  GOL: 
+    label: "Glycerol"
+    nprots: 1
+  mk004: 
+    label: "87 frames"
+    nprots: 1
+  mk005: 
+    label: "34 frames"
+    nprots: 1
+plots:
+  undulations:
+    calculation: 
+      undulations:
+        grid_spacing: 0.5
+    slices: current
+    collections: all
+    specs:
+      grid_spacing: 0.5
+  heights:
+    calculation: lipid_mesh
+    slices: current
+    collections:
+      - all
+    specs:
+      upstream:
+        lipid_mesh:
+          upstream:
+            lipid_abstractor:
+              selector: lipid_com
+  protein_lipid_contacts:
+    calculation: protein_lipid_contacts
+    slices: current
+    collections:
+      - all
+    specs:
+  protein_abstractor:
+    calculation: protein_abstractor
+    slices: current_protein
+    collections: all
+  curvature_coupling:
+    calculation:
+      - protein_lipid_contacts
+      - undulations
+      - protein_abstractor
+    collections: all
+    slices: current
+    specs:
+      # last of the sweeps is  the active one
+      sweeps:
+        - {'cfsig':'hcv3a','roundsig':'v5a','base_range_sweep':[0,1,2,3,4,5,6,7,8,9,10,12,18,24,32,64],'base_range':[0.0,0.005,0.01,0.014,0.018,0.02,0.024,0.028,0.032,0.04,0.05,0.06,0.07,0.08,0.09,0.1]}
+        #- {'cfsig':'hcv3b','roundsig':'v5b','base_range_sweep':[0,1,2,3,4,5],'base_range':[0.0,0.005,0.01,0.014,0.018,0.02,0.024,0.028,0.032,0.04,0.05,0.06,0.07,0.08,0.09,0.1]}
+  lipid_areas:
+    calculation: lipid_mesh
+    slices: current
+    collections:
+      - all
+    specs:
+      upstream:
+        lipid_mesh:
+          upstream:
+            lipid_abstractor:
+              selector: lipid_com
+
+  lipid_areas2d:
+    calculation: lipid_areas2d
+    slices: current
+    collections:
+      - all
+    specs:
+      upstream:
+        lipid_mesh:
+          upstream:
+            lipid_abstractor:
+              selector: lipid_com
+  contacts_curvature_coupling:
+    calculation:
+      - protein_lipid_contacts
+      - undulations
+      - protein_abstractor
+    collections: all
+    slices: current
+    specs:
+      sweeps:
+        - {'cfsig':'hcv3a','roundsig':'v5a','base_range_sweep':[0,1,2,3,4,5,6,7,8,9,10,12,18,24,32,64],'base_range':[0.0,0.005,0.01,0.014,0.018,0.02,0.024,0.028,0.032,0.04,0.05,0.06,0.07,0.08,0.09,0.1]}
+  curvature_undulation_coupling:
+    calculation: 
+      - protein_abstractor
+      - undulations
+    collections: all
+    specs: 
+      routine:
+        - individual_reviews
+    notes:
+      curvature_undulation_coupling_notes: |
+        Note that we have to check the following features of this calculation:
+          1. are curvature fields wrapping over PBCs?
+          2. is the average field a faithful depiction of the field i.e. what do instantaneous fields look like when the protein is on either side? and why is the top part of the box completely zeroed out even though the bottom part has some intensity at the edge? it is likely that the reference grid is not wrapping.
