@@ -3,8 +3,8 @@ collections:
     #- TAS
     #- TRG
     #- GOL
-    - bulk_GOL
-    - bulk_TRG_GOL
+    #- bulk_GOL
+    #- bulk_TRG_GOL
 slices:
   TAS:
     readymade_namd:
@@ -39,10 +39,10 @@ calculations:
     collections: all
     specs:
       writepdb: 'y'
-      verbose: 1
+      verbose: 3
       average_frames: 'n'
       name_modifier: 'mol'
-      nthreads: 14
+      nthreads: 7
       selector:
         selection_key: "resname GOL"
         water_resname: "resname TIP3"
