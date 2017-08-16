@@ -1,8 +1,10 @@
 collections:
   all:
-    - TAS
-    - TRG
-    - GOL
+    #- TAS
+    #- TRG
+    #- GOL
+    - bulk_GOL
+    - bulk_TRG_GOL
 slices:
   TAS:
     readymade_namd:
@@ -19,16 +21,16 @@ slices:
       current:
         psf: "GOL.pdb"
         dcds: ['GOL.dcd']
-  mk004:
+  bulk_GOL:
     readymade_namd:
       current:
-        psf: "1protein_again_autopsf.pdb"
-        dcds: ['sample3.dcd']
-  mk005:
+        psf: "bulk_GOL/2copies_autopsf.pdb"
+        dcds: ['bulk_GOL/GOL_first-50000_last-130000.dcd']
+  bulk_TRG_GOL:
     readymade_namd:
       current:
-        psf: "1protein_again_autopsf.pdb"
-        dcds: ['BMEM_sample.dcd']
+        psf: "bulk_TRG_GOL/solvate.pdb"
+        dcds: ['bulk_TRG_GOL/TRG_GOL_first-50000_last-130000.dcd']
 calculations:
   electrostatic_map:
     uptype: simulation
@@ -40,8 +42,9 @@ calculations:
       verbose: 1
       average_frames: 'n'
       name_modifier: 'mol'
+      nthreads: 14
       selector:
-        selection_key: "resname TAS GLB GLY TRG GOL"
+        selection_key: "resname GOL"
         water_resname: "resname TIP3"
         grid_spacing: 1.0
 variables:
