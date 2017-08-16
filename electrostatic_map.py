@@ -888,6 +888,8 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	global dL
 	global name_modifier
 	global verbose
+	global nthreads
+
 	if 'selection_key' in kwargs['calc']['specs']['selector']:
 		selection_key = kwargs['calc']['specs']['selector']['selection_key']
 	else: 
@@ -934,7 +936,6 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	global positions
 	global water
 	global nframes
-	global nthreads
 
 	#--- READ DATA
 	[nframes, positions, water] = extract_traj_info(grofile,trajfile,selection_key)

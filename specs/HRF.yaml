@@ -24,7 +24,7 @@ slices:
   bulk_GOL:
     readymade_namd:
       current:
-        psf: "bulk_GOL/2copies_autopsf.pdb"
+        psf: "bulk_GOL/solvate.pdb"
         dcds: ['bulk_GOL/GOL_first-50000_last-130000.dcd']
   bulk_TRG_GOL:
     readymade_namd:
