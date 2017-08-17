@@ -3,7 +3,7 @@ collections:
     #- TAS
     #- TRG
     #- GOL
-    #- bulk_GOL
+    - bulk_GOL
     #- bulk_TRG_GOL
 slices:
   TAS:
@@ -29,7 +29,7 @@ slices:
   bulk_TRG_GOL:
     readymade_namd:
       current:
-        psf: "bulk_TRG_GOL/solvate.pdb"
+        psf: "bulk_TRG_GOL/2copies_autopsf.pdb"
         dcds: ['bulk_TRG_GOL/TRG_GOL_first-50000_last-130000.dcd']
 calculations:
   electrostatic_map:
@@ -42,7 +42,7 @@ calculations:
       verbose: 3
       average_frames: 'n'
       name_modifier: 'mol'
-      nthreads: 7
+      nthreads: 15
       selector:
         selection_key: "resname GOL"
         water_resname: "resname TIP3"

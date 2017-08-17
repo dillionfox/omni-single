@@ -683,6 +683,18 @@ def compute_VRS(ii_coor,ii_point,water_coor):
 		y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*np.exp(-x*x)
 		return sign*y
 
+	def rewrap(r,pbc):
+		rp = np.zeros(3)
+		for i in range(3):
+			if abs(r[i]) > pbc[i]/2.0:
+				if r[i] > 0:
+					rp[i] = r[i] - pbc[i]
+				else:
+					rp[i] = r[i] + pbc[i]
+			else:
+				rp[i] = r[i]
+		return rp
+
 	vrs=0
 	SI_unit_conv = 1.084E8*1.602E-19*1E12 				# pV
 	ii_pos = ii_coor[ii_point]
@@ -690,8 +702,11 @@ def compute_VRS(ii_coor,ii_point,water_coor):
 	for i in range(n_water)[::3]:
 		for j in range(3):
 			rvec = water_coor[i+j]-ii_pos
-			wrap = [int((rvec[i]/pbc[i])+0.5) for i in range(3)]
-			rvec = [rvec[i] - wrap[i]*pbc[i] for i in range(3)]
+			wrap1 = [int((rvec[i]/pbc[i])+0.5) for i in range(3)]
+			wrap2 = [int((rvec[i]/pbc[i])-0.5) for i in range(3)]
+			rvec = [rvec[i] - wrap1[i]*pbc[i] for i in range(3)]
+			rvec = [rvec[i] - wrap2[i]*pbc[i] for i in range(3)]
+			#rvec = rewrap(rvec,pbc)
 			r = np.sqrt(np.dot(rvec,rvec))
 			vrs += chg[j] * erf(r/sigma) / (r)
 	return vrs*SI_unit_conv

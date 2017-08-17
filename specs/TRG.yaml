@@ -5,8 +5,8 @@ slices:
   TRG_GOL_bulk:
     readymade_namd:
       current:
-        psf: "bulk_TRG_GOL/2copies_autopsf.pdb"
-        dcds: ['bulk_TRG_GOL/TRG_GOL_first-50000_last-130000.dcd']
+        psf: "ABF_GOL_GOL-TRG_7/solvate.pdb"
+        dcds: ['ABF_GOL_GOL-TRG_7/solvate_0002_frames-1000-3000_stride-10.dcd']
 calculations:
   electrostatic_map:
     uptype: simulation
