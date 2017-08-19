@@ -733,6 +733,8 @@ def compute_LREP(ii_coor,water_coor):
 	global chg
 	global sigma
 
+	refVal = 'n'
+
 	sigma = 4.5
 	npro = n_heavy_atoms
 	nconf = 1.0
@@ -750,9 +752,12 @@ def compute_LREP(ii_coor,water_coor):
 			print 'completed', ii, ' out of', II
 		VRS[ii] = compute_VRS(ii_coor,ii,water_coor)
 
-	refVal = compute_refVal(water_coor)
+	if refVal == 'y':
+		refVal = compute_refVal(water_coor)
+		LREP = [V-refVal for V in VRS]
+	else:
+		LREP = VRS
 
-	LREP = [V-refVal for V in VRS]
 	return LREP 
 
 def compute_av_emaps(fr):
