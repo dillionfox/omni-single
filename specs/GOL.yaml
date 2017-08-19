@@ -3,34 +3,13 @@ collections:
     #- TAS
     #- TRG
     #- GOL
-    - bulk_GOL
-    #- bulk_TRG_GOL
+    - GOL_bulk
 slices:
-  TAS:
+  GOL_bulk:
     readymade_namd:
       current:
-        psf: "TAS.pdb"
-        dcds: ['TAS.dcd']
-  TRG:
-    readymade_namd:
-      current:
-        psf: "TRG.pdb"
-        dcds: ['TRG.dcd']
-  GOL:
-    readymade_namd:
-      current:
-        psf: "GOL.pdb"
-        dcds: ['GOL.dcd']
-  bulk_GOL:
-    readymade_namd:
-      current:
-        psf: "bulk_GOL/solvate.pdb"
-        dcds: ['bulk_GOL/GOL_first-50000_last-130000.dcd']
-  bulk_TRG_GOL:
-    readymade_namd:
-      current:
-        psf: "bulk_TRG_GOL/2copies_autopsf.pdb"
-        dcds: ['bulk_TRG_GOL/TRG_GOL_first-50000_last-130000.dcd']
+        psf: "ABF_GOL_GOL/abf_beta.pdb"
+        dcds: ['ABF_GOL_GOL/GOL_0002_frames-1000-3000_stride-10.dcd']
 calculations:
   electrostatic_map:
     uptype: simulation
@@ -42,7 +21,7 @@ calculations:
       verbose: 3
       average_frames: 'n'
       name_modifier: 'mol'
-      nthreads: 15
+      nthreads: 1
       selector:
         selection_key: "resname GOL"
         water_resname: "resname TIP3"
