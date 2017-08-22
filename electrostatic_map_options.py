@@ -41,6 +41,11 @@ for each frame, but the electrostatic mapping procedure took about 3.5 hours. Si
 parallelized, it actually spat out 8 electrostatic maps every 3.5 hours, so on average it took about
 half an hour per frame. 
 
+NAMING SCHEME:
+LREP: long ranged electrostatic potential
+II: instantaneous interface
+'extra' means include molecules in the LREP calculation other than water
+
 """
 
 #--- WRITE OUTPUT
@@ -106,6 +111,10 @@ def extract_traj_info(PSF,DCD,selection_key):
         n_water = len(water.atoms)					# number of heavy protein atoms
         water_pos = np.zeros((nframes,n_water,3))
 
+	extra = uni.select_atoms('not resname TIP3')
+	extra_chg = extra.charges
+	extra_pos = np.zeros((nframes,len(extra.atoms),3))
+
         for fr in range(nframes):                                       # save coordinates for each frame
                 uni.trajectory[fr]
         	pbc = uni.dimensions[0:3]				# retrieve periodic bounds
@@ -117,11 +126,14 @@ def extract_traj_info(PSF,DCD,selection_key):
         	heavy_atoms = protein.select_atoms('not name H*')	# Only need to consider heavy atoms
 		positions[fr] = heavy_atoms.positions
 
+		extra = uni.select_atoms('not resname TIP3')
+		extra_pos[fr] = extra.positions
+
         	water = uni.select_atoms("resname TIP3")		# identify atoms to build interface around
 		water_pos[fr] = water.positions
 
         pbc = uni.dimensions[0:3]					# retrieve periodic bounds
-        return [nframes,positions,water_pos]
+        return [nframes,positions,water_pos,extra_pos,extra_chg]
 
 #--- FUNCTIONS FOR COMPUTING RHO
 def erf(x):
@@ -663,12 +675,14 @@ def marching_cubes(rho):
 	return ii_coor
 
 #--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
-def compute_VRS(ii_coor,ii_point,water_coor):
+def compute_VRS(ii_coor,ii_point,water_coor,extra_coor):
 	"""
 	This function computes the electric potential at *an* interface point from (every) water molecule in the
 	system. The electric potential is then weighted by an error function, which gives you the Long-Range
 	Electrostatic Potential
 	"""
+
+	global extra_chg
 
 	def erf(x):
 		sign = 1 if x >= 0 else -1
@@ -699,16 +713,31 @@ def compute_VRS(ii_coor,ii_point,water_coor):
 	SI_unit_conv = 1.084E8*1.602E-19*1E12 				# pV
 	ii_pos = ii_coor[ii_point]
 	n_water = water_coor.shape[0]
+	n_extra = extra_coor.shape[0]
+
+	#--- loop over each water molecule
 	for i in range(n_water)[::3]:
+		#--- loop over each atom in the molecule
 		for j in range(3):
 			rvec = water_coor[i+j]-ii_pos
 			wrap1 = [int((rvec[i]/pbc[i])+0.5) for i in range(3)]
 			wrap2 = [int((rvec[i]/pbc[i])-0.5) for i in range(3)]
 			rvec = [rvec[i] - wrap1[i]*pbc[i] for i in range(3)]
 			rvec = [rvec[i] - wrap2[i]*pbc[i] for i in range(3)]
-			#rvec = rewrap(rvec,pbc)
 			r = np.sqrt(np.dot(rvec,rvec))
 			vrs += chg[j] * erf(r/sigma) / (r)
+	temp_save = vrs
+
+	for n in range(n_extra):
+		rvec = extra_coor[n]-ii_pos
+		wrap1 = [int((rvec[i]/pbc[i])+0.5) for i in range(3)]
+		wrap2 = [int((rvec[i]/pbc[i])-0.5) for i in range(3)]
+		rvec = [rvec[i] - wrap1[i]*pbc[i] for i in range(3)]
+		rvec = [rvec[i] - wrap2[i]*pbc[i] for i in range(3)]
+		r = np.sqrt(np.dot(rvec,rvec))
+		vrs += extra_chg[n] * erf(r/sigma) / (r)
+	print temp_save, vrs
+
 	return vrs*SI_unit_conv
 
 def compute_refVal(water_coor):
@@ -738,7 +767,7 @@ def compute_refVal(water_coor):
 			vrs += chg[j] * erf(r/sigma) / (r)
 	return vrs
 
-def compute_LREP(ii_coor,water_coor):
+def compute_LREP(ii_coor,water_coor,extra_coor):
 	"""
 	This function cycles through *every* interface point, and calls the function that calculates the long-range
 	electrostatic potential at each of those points.
@@ -766,7 +795,7 @@ def compute_LREP(ii_coor,water_coor):
 	for ii in range(II):
 		if ii%reminders == 0 and verbose >= 3:
 			print 'completed', ii, ' out of', II
-		VRS[ii] = compute_VRS(ii_coor,ii,water_coor)
+		VRS[ii] = compute_VRS(ii_coor,ii,water_coor,extra_coor)
 
 	if refVal == 'y':
 		refVal = compute_refVal(water_coor)
@@ -786,16 +815,18 @@ def compute_av_emaps(fr):
 
 	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
 	global water
+	global extra_pos
 	global first_II_coors
 
 	#--- EXTRACT INFO FOR FRAME, FR
 	if verbose >= 3:
 		print 'working on frame', fr+1, ' of', nframes
 	water_coor = water[fr]
+	extra_coor = extra_pos[fr]
 
 	#--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	LREP = compute_LREP(first_II_coors,water_coor)
+	LREP = compute_LREP(first_II_coors,water_coor,extra_coor)
 	LREP_stop = time.time()
 	if verbose >= 2:
 		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
@@ -861,12 +892,14 @@ def run_emaps(fr):
 	global positions
 	global water
 	global nframes
+	global extra_pos
 
 	#--- EXTRACT INFO FOR FRAME, FR
 	if verbose >= 3:
 		print 'working on frame', fr+1, ' of', nframes
 	pos=positions[fr] 
 	water_coor = water[fr]
+	extra_coor = extra_pos[fr]
 	
 	#--- COMPUTE RHO
 	coarse_grain_start = time.time()
@@ -884,14 +917,14 @@ def run_emaps(fr):
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	LREP = compute_LREP(interface_coors,water_coor)
+	LREP = compute_LREP(interface_coors,water_coor,extra_coor)
 	LREP_stop = time.time()
 	if verbose >= 2:
 		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
 	write_pdb(interface_coors,LREP,fr)
 	return 0
 	
-def electrostatic_map(grofile,trajfile,**kwargs):
+def electrostatic_map_options(grofile,trajfile,**kwargs):
 	"""
 	This is the MAIN function. It reads in all data and decides which functions should be called to
 	compute either averaged or individual electrostatic maps.
@@ -916,6 +949,11 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	else: 
 		print 'need to provide selection key in yaml file'
 		exit()
+
+	if 'exclude_selection' in kwargs['calc']['specs']['selector']:
+		exclude_key = kwargs['calc']['specs']['selector']['exclude_selection']
+	else: 
+		exclude_key = ""
 
 	if 'water_resname' in kwargs['calc']['specs']['selector']:
 		water_resname = kwargs['calc']['specs']['selector']['water_resname']
@@ -957,9 +995,11 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	global positions
 	global water
 	global nframes
+	global extra_pos
+	global extra_chg
 
 	#--- READ DATA
-	[nframes, positions, water] = extract_traj_info(grofile,trajfile,selection_key)
+	[nframes, positions, water, extra_pos, extra_chg] = extract_traj_info(grofile,trajfile,selection_key)
 			# defines global variables: n_heavy_atoms, pbc
 
 	#--- adjust number of threads so there aren't more threads than frames
