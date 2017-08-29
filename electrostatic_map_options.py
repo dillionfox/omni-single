@@ -726,7 +726,6 @@ def compute_VRS(ii_coor,ii_point,water_coor,extra_coor):
 			rvec = [rvec[i] - wrap2[i]*pbc[i] for i in range(3)]
 			r = np.sqrt(np.dot(rvec,rvec))
 			vrs += chg[j] * erf(r/sigma) / (r)
-	temp_save = vrs
 
 	for n in range(n_extra):
 		rvec = extra_coor[n]-ii_pos
@@ -736,7 +735,6 @@ def compute_VRS(ii_coor,ii_point,water_coor,extra_coor):
 		rvec = [rvec[i] - wrap2[i]*pbc[i] for i in range(3)]
 		r = np.sqrt(np.dot(rvec,rvec))
 		vrs += extra_chg[n] * erf(r/sigma) / (r)
-	print temp_save, vrs
 
 	return vrs*SI_unit_conv
 
