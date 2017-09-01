@@ -41,6 +41,11 @@ for each frame, but the electrostatic mapping procedure took about 3.5 hours. Si
 parallelized, it actually spat out 8 electrostatic maps every 3.5 hours, so on average it took about
 half an hour per frame. 
 
+NAMING SCHEME:
+LREP: long ranged electrostatic potential
+II: instantaneous interface
+'extra' means include molecules in the LREP calculation other than water
+
 """
 
 #--- WRITE OUTPUT
@@ -89,15 +94,11 @@ def extract_traj_info(PSF,DCD,selection_key):
         # load some variables into global namespace
         global n_heavy_atoms
         global pbc
-        global pbc_fr
 	global box_shift
-	global first_frame
-	global last_frame
 
         uni = MDAnalysis.Universe(PSF,DCD)
         nframes = len(uni.trajectory)					# number of frames
 	box_shift = np.zeros((nframes,3))
-	pbc_fr = np.zeros((nframes,3))
 
         protein = uni.select_atoms(selection_key)			# identify atoms to build interface around
         heavy_atoms = protein.select_atoms('not name H*')		# Only need to consider heavy atoms
@@ -110,15 +111,13 @@ def extract_traj_info(PSF,DCD,selection_key):
         n_water = len(water.atoms)					# number of heavy protein atoms
         water_pos = np.zeros((nframes,n_water,3))
 
-	#if last_frame > nframes:
-	#	last_frame = nframes
-	#frames = range(first_frame,last_frame)
-	#nframes = last_frame-first_frame
-	frames = range(nframes)
-        for fr in frames:                                       # save coordinates for each frame
+	extra = uni.select_atoms('not resname TIP3')
+	extra_chg = extra.charges
+	extra_pos = np.zeros((nframes,len(extra.atoms),3))
+
+        for fr in range(nframes):                                       # save coordinates for each frame
                 uni.trajectory[fr]
         	pbc = uni.dimensions[0:3]				# retrieve periodic bounds
-        	pbc_fr[fr] = pbc
         	sel = uni.select_atoms('all')
 		box_shift[fr] = -sel.atoms.center_of_mass()+pbc/2.0	# first center at origin, then put vertx of quadrant 7 at origin
         	sel.atoms.translate(box_shift[fr])			# center selection
@@ -127,11 +126,14 @@ def extract_traj_info(PSF,DCD,selection_key):
         	heavy_atoms = protein.select_atoms('not name H*')	# Only need to consider heavy atoms
 		positions[fr] = heavy_atoms.positions
 
+		extra = uni.select_atoms('not resname TIP3')
+		extra_pos[fr] = extra.positions
+
         	water = uni.select_atoms("resname TIP3")		# identify atoms to build interface around
 		water_pos[fr] = water.positions
 
         pbc = uni.dimensions[0:3]					# retrieve periodic bounds
-        return [nframes,positions,water_pos]
+        return [nframes,positions,water_pos,extra_pos,extra_chg]
 
 #--- FUNCTIONS FOR COMPUTING RHO
 def erf(x):
@@ -673,12 +675,14 @@ def marching_cubes(rho):
 	return ii_coor
 
 #--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
-def compute_VRS(ii_coor,ii_point,water_coor):
+def compute_VRS(ii_coor,ii_point,water_coor,extra_coor):
 	"""
 	This function computes the electric potential at *an* interface point from (every) water molecule in the
 	system. The electric potential is then weighted by an error function, which gives you the Long-Range
 	Electrostatic Potential
 	"""
+
+	global extra_chg
 
 	def erf(x):
 		sign = 1 if x >= 0 else -1
@@ -709,16 +713,29 @@ def compute_VRS(ii_coor,ii_point,water_coor):
 	SI_unit_conv = 1.084E8*1.602E-19*1E12 				# pV
 	ii_pos = ii_coor[ii_point]
 	n_water = water_coor.shape[0]
+	n_extra = extra_coor.shape[0]
+
+	#--- loop over each water molecule
 	for i in range(n_water)[::3]:
+		#--- loop over each atom in the molecule
 		for j in range(3):
 			rvec = water_coor[i+j]-ii_pos
 			wrap1 = [int((rvec[i]/pbc[i])+0.5) for i in range(3)]
 			wrap2 = [int((rvec[i]/pbc[i])-0.5) for i in range(3)]
 			rvec = [rvec[i] - wrap1[i]*pbc[i] for i in range(3)]
 			rvec = [rvec[i] - wrap2[i]*pbc[i] for i in range(3)]
-			#rvec = rewrap(rvec,pbc)
 			r = np.sqrt(np.dot(rvec,rvec))
 			vrs += chg[j] * erf(r/sigma) / (r)
+
+	for n in range(n_extra):
+		rvec = extra_coor[n]-ii_pos
+		wrap1 = [int((rvec[i]/pbc[i])+0.5) for i in range(3)]
+		wrap2 = [int((rvec[i]/pbc[i])-0.5) for i in range(3)]
+		rvec = [rvec[i] - wrap1[i]*pbc[i] for i in range(3)]
+		rvec = [rvec[i] - wrap2[i]*pbc[i] for i in range(3)]
+		r = np.sqrt(np.dot(rvec,rvec))
+		vrs += extra_chg[n] * erf(r/sigma) / (r)
+
 	return vrs*SI_unit_conv
 
 def compute_refVal(water_coor):
@@ -748,7 +765,7 @@ def compute_refVal(water_coor):
 			vrs += chg[j] * erf(r/sigma) / (r)
 	return vrs
 
-def compute_LREP(ii_coor,water_coor):
+def compute_LREP(ii_coor,water_coor,extra_coor):
 	"""
 	This function cycles through *every* interface point, and calls the function that calculates the long-range
 	electrostatic potential at each of those points.
@@ -764,6 +781,7 @@ def compute_LREP(ii_coor,water_coor):
 	npro = n_heavy_atoms
 	nconf = 1.0
 	chg = [-0.834, 0.417, 0.417]	
+	#sigma = 0.45
 	II = len(ii_coor)
 	VRS = np.zeros(II)
 
@@ -775,7 +793,7 @@ def compute_LREP(ii_coor,water_coor):
 	for ii in range(II):
 		if ii%reminders == 0 and verbose >= 3:
 			print 'completed', ii, ' out of', II
-		VRS[ii] = compute_VRS(ii_coor,ii,water_coor)
+		VRS[ii] = compute_VRS(ii_coor,ii,water_coor,extra_coor)
 
 	if refVal == 'y':
 		refVal = compute_refVal(water_coor)
@@ -795,16 +813,18 @@ def compute_av_emaps(fr):
 
 	#--- RETRIEVE VARIABLES FROM GLOBAL NAMESPACE
 	global water
+	global extra_pos
 	global first_II_coors
 
 	#--- EXTRACT INFO FOR FRAME, FR
 	if verbose >= 3:
 		print 'working on frame', fr+1, ' of', nframes
 	water_coor = water[fr]
+	extra_coor = extra_pos[fr]
 
 	#--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	LREP = compute_LREP(first_II_coors,water_coor)
+	LREP = compute_LREP(first_II_coors,water_coor,extra_coor)
 	LREP_stop = time.time()
 	if verbose >= 2:
 		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
@@ -848,9 +868,7 @@ def run_av_emaps():
 	global first_II_coors
 	global nthreads
 	global nframes
-	global first_frame
-	global last_frame
-	frames = range(first_frame,last_frame)
+	frames = range(nframes)
 	first_II_coors = first_II()
 	all_LREPs = Parallel(n_jobs=nthreads)(delayed(compute_av_emaps,has_shareable_memory)(fr) for fr in frames)
 	av_LREP = np.zeros(len(all_LREPs[0]))
@@ -872,12 +890,14 @@ def run_emaps(fr):
 	global positions
 	global water
 	global nframes
+	global extra_pos
 
 	#--- EXTRACT INFO FOR FRAME, FR
 	if verbose >= 3:
 		print 'working on frame', fr+1, ' of', nframes
 	pos=positions[fr] 
 	water_coor = water[fr]
+	extra_coor = extra_pos[fr]
 	
 	#--- COMPUTE RHO
 	coarse_grain_start = time.time()
@@ -895,63 +915,14 @@ def run_emaps(fr):
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	LREP = compute_LREP(interface_coors,water_coor)
+	LREP = compute_LREP(interface_coors,water_coor,extra_coor)
 	LREP_stop = time.time()
 	if verbose >= 2:
 		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
 	write_pdb(interface_coors,LREP,fr)
 	return 0
-
-def run_grid_method():
-	"""
-	This function constructs a uniform, 3D grid and computes the LREP at each grid point
-	"""
-	global verbose
-        global pbc
-        global pbc_fr
-	global dL
-	global nframes
-	global water
-	global first_II_coors
-	global nthreads
-	global first_frame
-	global last_frame
-
-	if verbose >= 1:
-		print 'running grid method'
-
-	#--- CONSTRUCT 3D GRID
-	npts = (pbc[:3]/np.array([dL,dL,dL])).astype(int)
-
-	#posts = np.array([[np.linspace(0,pbc_fr[fr][d],npts[d]+1) 
-	#	for d in range(3)] for fr in range(nframes)])
-
-	#fence = np.array([[(posts[fr][d][1:]+posts[fr][d][:-1])/2. for d in range(3)]
-	#	for fr in range(nframes)])
-
-	#points = np.array([np.concatenate(np.transpose(np.meshgrid(*fence[fr]))) 
-	#	for fr in range(nframes)])
-
-	posts = np.array([np.linspace(0,pbc[d],npts[d]+1) for d in range(3)])
-
-	fence = np.array([(posts[d][1:]+posts[d][:-1])/2. for d in range(3)])
-
-	points = np.array(np.concatenate(np.transpose(np.meshgrid(*fence)))) 
-	d = np.prod(points.shape[:-1])
-	first_II_coors = points.reshape((d,3))
 	
-	#--- PREPARE FOR LREP CALCULATION
-	frames = range(first_frame,last_frame)
-	all_LREPs = Parallel(n_jobs=nthreads)(delayed(compute_av_emaps,has_shareable_memory)(fr) for fr in frames)
-	av_LREP = np.zeros(len(all_LREPs[0]))
-	for el in all_LREPs:
-		av_LREP += el
-	av_LREP/=nframes
-	write_pdb(first_II_coors,av_LREP,'gav')
-
-	return [0]
-
-def electrostatic_map(grofile,trajfile,**kwargs):
+def electrostatic_map_options(grofile,trajfile,**kwargs):
 	"""
 	This is the MAIN function. It reads in all data and decides which functions should be called to
 	compute either averaged or individual electrostatic maps.
@@ -970,45 +941,31 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	global name_modifier
 	global verbose
 	global nthreads
-	global first_frame
-	global last_frame
-
-
-	if 'grid_method' in kwargs['calc']['specs']['selector']:
-		grid_method = kwargs['calc']['specs']['selector']['grid_method']
-		print "you are using the grid method which computes the potential at evenly spaced grid points instead of instantaneous interfaces"
-	else:
-		grid_method = 'n'
 
 	if 'selection_key' in kwargs['calc']['specs']['selector']:
 		selection_key = kwargs['calc']['specs']['selector']['selection_key']
-	elif grid_method != 'y': 
+	else: 
 		print 'need to provide selection key in yaml file'
 		exit()
-	else:
-		selection_key = "resid 0"
 
-	if 'grid_spacing' in kwargs['calc']['specs']['selector']:
-		dL = kwargs['calc']['specs']['selector']['grid_spacing']
-		if grid_method != 'y':
-			if dL > 1:
-				print "you are using a grid spacing of:", dL, ". The recommended value is 1.0. This may cause issues."
-			if dL < 1:
-				print "you are using a grid spacing of:", dL, ". The recommended value is 1.0. You can probably increase this to save time."
-	elif grid_method == 'y': 
-		dL = 5
-	else:
-		dL = 1 
-
-	if 'average_frames' in kwargs['calc']['specs']:
-		av_LREP = kwargs['calc']['specs']['average_frames']
-	else: av_LREP = 'n'
+	if 'exclude_selection' in kwargs['calc']['specs']['selector']:
+		exclude_key = kwargs['calc']['specs']['selector']['exclude_selection']
+	else: 
+		exclude_key = ""
 
 	if 'water_resname' in kwargs['calc']['specs']['selector']:
 		water_resname = kwargs['calc']['specs']['selector']['water_resname']
 	else: 
 		print 'did not provide water_resname in yaml file. Using water_resname = resname TIP3'
 		water_resname = "resname TIP3"
+
+	if 'grid_spacing' in kwargs['calc']['specs']['selector']:
+		dL = kwargs['calc']['specs']['selector']['grid_spacing']
+		if dL > 1:
+			print "you are using a grid spacing of:", dL, ". The recommended value is 1.0. This may cause issues."
+		if dL < 1:
+			print "you are using a grid spacing of:", dL, ". The recommended value is 1.0. You can probably increase this to save time."
+	else: dL = 1 
 
 	if 'name_modifier' in kwargs['calc']['specs']:
 		name_modifier = "_" + str(kwargs['calc']['specs']['name_modifier'])
@@ -1017,14 +974,6 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 	if 'verbose' in kwargs['calc']['specs']:
 		verbose = kwargs['calc']['specs']['verbose']
 	else: verbose = 1
-
-	if 'first_frame' in kwargs['calc']['specs']:
-		first_frame = kwargs['calc']['specs']['first_frame']
-	else: first_frame = 1
-
-	if 'last_frame' in kwargs['calc']['specs']:
-		last_frame = kwargs['calc']['specs']['last_frame']
-	else: last_frame = -1
 
 	if 'nthreads' in kwargs['calc']['specs']:
 		nthreads = kwargs['calc']['specs']['nthreads']
@@ -1035,14 +984,20 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 		writepdb = 'y'
 	else: writepdb = 'n'
 
+	if 'average_frames' in kwargs['calc']['specs']:
+		av_LREP = kwargs['calc']['specs']['average_frames']
+	else: av_LREP = 'n'
+
 	#--- LOAD VARIABLES INTO GLOBAL NAMESPACE
 	global box_shift
 	global positions
 	global water
 	global nframes
+	global extra_pos
+	global extra_chg
 
 	#--- READ DATA
-	[nframes, positions, water] = extract_traj_info(grofile,trajfile,selection_key)
+	[nframes, positions, water, extra_pos, extra_chg] = extract_traj_info(grofile,trajfile,selection_key)
 			# defines global variables: n_heavy_atoms, pbc
 
 	#--- adjust number of threads so there aren't more threads than frames
@@ -1050,33 +1005,18 @@ def electrostatic_map(grofile,trajfile,**kwargs):
 		nthreads = nframes
 
 	#--- LOOP THROUGH FRAMES IN TRAJECTORY
-	if last_frame == -1:
-		print "fuck ", nframes
-		last_frame = nframes
-	if first_frame > nframes:
-		print "first frame requested is larger than the total number of frames!"
-		print nframes
-		print last_frame
-		print first_frame
-		exit()
-	frames = range(first_frame,last_frame)
+	frames = range(nframes)
 
-	#--- you can either compute electrostatic maps at instantaneous interfaces or on a uniformly spaced grid throughout the simulation
-	#--- INSTANTANEOUS INTERFACE METHOD
-	if grid_method != 'y':
-		#--- user has option to make one electrostatic map that represents the average potential at (1) instantaneous interface
-		#	over the course of the simulation. This is recommended by Remsing & Weeks, but is not always conducive to
-		#	the simulation set up
-		if av_LREP != 'y':
-			check = Parallel(n_jobs=nthreads)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
-		#--- determine (1) instantaneous interface and use those points to calculate the potential at each frame. Then divide
-		# 	by the number of frames
-		else:
-			check = run_av_emaps()
-	#--- GRID METHOD
+	#--- user has option to make one electrostatic map that represents the average potential at (1) instantaneous interface
+	#	over the course of the simulation. This is recommended by Remsing & Weeks, but is not always conducive to
+	#	the simulation set up
+	if av_LREP != 'y':
+		check = Parallel(n_jobs=nthreads)(delayed(run_emaps,has_shareable_memory)(fr) for fr in frames)
+	#--- determine (1) instantaneous interface and use those points to calculate the potential at each frame. Then divide
+	# 	by the number of frames
 	else:
-		check = run_grid_method()
-
+		check = run_av_emaps()
+	
 	#--- PACK UP RESULTS AND SEND BACK TO OMNICALC
 	if all(c == 0 for c in check):
 		attrs,result = {},{}

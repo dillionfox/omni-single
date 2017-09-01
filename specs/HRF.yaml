@@ -14,25 +14,70 @@ slices:
   TRG:
     readymade_namd:
       current:
-        psf: "TRG.pdb"
-        dcds: ['TRG.dcd']
+        #psf: "TRG_constrained/TRG.pdb"
+        psf: "TRG_constrained/beta.psf"
+        dcds: ['TRG_constrained/TRG_10000-15000_100.dcd']
   GOL:
     readymade_namd:
       current:
-        psf: "GOL.pdb"
-        dcds: ['GOL.dcd']
+        psf: "GOL_constrained/GOL.pdb"
+        dcds: ['GOL_constrained/GOL_10000-15000_100.dcd']
   bulk_GOL:
     readymade_namd:
       current:
-        psf: "bulk_GOL/solvate.pdb"
+        psf: "bulk_GOL/2copies_autopsf.psf"
         dcds: ['bulk_GOL/GOL_first-50000_last-130000.dcd']
   bulk_TRG_GOL:
     readymade_namd:
       current:
-        psf: "bulk_TRG_GOL/2copies_autopsf.pdb"
+        psf: "bulk_TRG_GOL/2copies_autopsf.psf"
         dcds: ['bulk_TRG_GOL/TRG_GOL_first-50000_last-130000.dcd']
+  bulk_GOL_beg:
+    readymade_namd:
+      current:
+        psf: "bulk_GOL/2copies_autopsf.psf"
+        dcds: ['bulk_GOL_beg/GOL_first-5000_last-50000.dcd']
+  bulk_TRG_GOL_beg:
+    readymade_namd:
+      current:
+        psf: "bulk_TRG_GOL/2copies_autopsf.psf"
+        dcds: ['bulk_TRG_GOL_beg/TRG_GOL_first-5000_last-50000.dcd']
 calculations:
   electrostatic_map:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      verbose: 3
+      average_frames: 'n'
+      name_modifier: 'beg_grid'
+      nthreads: 15
+      selector:
+        grid_method: 'y'
+        water_resname: "resname TIP3"
+        grid_spacing: 7.0
+        first_frame: 1
+        last_frame: 100
+aside:
+  electrostatic_map:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      verbose: 2
+      average_frames: 'n'
+      name_modifier: 'correct'
+      nthreads: 15
+      selector:
+        selection_key: "resname GOL"
+        water_resname: "resname TIP3"
+        grid_spacing: 1.0
+  # include every atom in system in potential (not just water)
+  electrostatic_map_options:
     uptype: simulation
     slice_name: current
     group: all
