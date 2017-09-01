@@ -22,7 +22,8 @@ def print_birdseye_snapshot_render(surfs,protpts,mvecs,nprots,handle='',
 	"""
 	Outer loop for rendering protein videos.
 	"""
-	if len(np.shape(surfs)) != 3: raise Exception('incoming data must be simulation by x by y')
+	if not all([len(np.shape(s))==2 for s in surfs]):
+		raise Exception('incoming data must be simulation by x by y')
 	npanels = len(surfs)
 	axes,fig = panelplot(**panelspecs)
 	#---loop over panels
@@ -79,7 +80,7 @@ def print_birdseye_snapshot_render(surfs,protpts,mvecs,nprots,handle='',
 	else: plt.show()
 
 def plothull(ax,points,griddims=None,vecs=None,c=None,mset=None,
-	alpha=None,nine=False,fill=None,radius=0.5,ec=None,lw=1):
+	alpha=None,nine=False,fill=None,radius=0.5,ec=None,lw=1,zorder=1):
 	"""
 	Plot an outline around each protein.
 	This function was copied from elsewhere.
@@ -88,14 +89,14 @@ def plothull(ax,points,griddims=None,vecs=None,c=None,mset=None,
 	if alpha == None: alpha = 0.65
 	if fill == None: fill = True
 	if type(vecs)==type(None): vecs = griddims
-	m,n = griddims
-	pts = np.array([[i[0]*m/vecs[0],i[1]*n/vecs[1]] for i in points])
+	if not griddims: m,n = 1.0,1.0
+	else: m,n = griddims
 	patches = []
 	#---you must send a vector with three dimensions: protein index, atom, xy
 	for pts in points:
 		hull = scipy.spatial.ConvexHull(pts)
 		p = ax.add_patch(mpl.patches.Polygon(pts[hull.vertices],
 			closed=True,fill=(True if fill else False),
-			facecolor=c,lw=lw,alpha=alpha,edgecolor=(c if ec == None else ec)))
+			facecolor=c,lw=lw,alpha=alpha,edgecolor=(c if ec == None else ec),zorder=zorder))
 		patches.append(p)
 	return patches
