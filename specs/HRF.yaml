@@ -1,27 +1,35 @@
 collections:
   all:
-    #- TAS
-    #- TRG
     #- GOL
+    #- TRG
+    #- TAS
+    #- GLB
     - bulk_GOL
-    #- bulk_TRG_GOL
+    - bulk_TRG_GOL
 slices:
-  TAS:
-    readymade_namd:
-      current:
-        psf: "TAS.pdb"
-        dcds: ['TAS.dcd']
-  TRG:
-    readymade_namd:
-      current:
-        #psf: "TRG_constrained/TRG.pdb"
-        psf: "TRG_constrained/beta.psf"
-        dcds: ['TRG_constrained/TRG_10000-15000_100.dcd']
   GOL:
     readymade_namd:
       current:
         psf: "GOL_constrained/GOL.pdb"
         dcds: ['GOL_constrained/GOL_10000-15000_100.dcd']
+  TRG:
+    readymade_namd:
+      current:
+        #psf: "TRG_constrained/TRG.pdb"
+        psf: "TRG_constrained/beta.psf"
+        #dcds: ['TRG_constrained/TRG.dcd']
+        dcds: ['TRG_constrained/TRG_10000-15000_100.dcd']
+  TAS:
+    readymade_namd:
+      current:
+        psf: "TAS_constrained/beta.psf"
+        #dcds: ['TAS_constrained/TAS.dcd']
+        dcds: ['TAS_constrained/TAS_10000-15000_100.dcd']
+  GLB:
+    readymade_namd:
+      current:
+        psf: "GLB_constrained/beta.psf"
+        dcds: ['GLB_constrained/GLB_10000-15000_100.dcd']
   bulk_GOL:
     readymade_namd:
       current:
@@ -43,7 +51,7 @@ slices:
         psf: "bulk_TRG_GOL/2copies_autopsf.psf"
         dcds: ['bulk_TRG_GOL_beg/TRG_GOL_first-5000_last-50000.dcd']
 calculations:
-  electrostatic_map:
+  electrostatic_mapping:
     uptype: simulation
     slice_name: current
     group: all
@@ -52,30 +60,16 @@ calculations:
       writepdb: 'y'
       verbose: 3
       average_frames: 'n'
-      name_modifier: 'beg_grid'
+      name_modifier: 'fixed'
       nthreads: 15
-      selector:
-        grid_method: 'y'
-        water_resname: "resname TIP3"
-        grid_spacing: 7.0
-        first_frame: 1
-        last_frame: 100
-aside:
-  electrostatic_map:
-    uptype: simulation
-    slice_name: current
-    group: all
-    collections: all
-    specs:
-      writepdb: 'y'
-      verbose: 2
-      average_frames: 'n'
-      name_modifier: 'correct'
-      nthreads: 15
+      first_frame: 0
+      last_frame: 100
       selector:
         selection_key: "resname GOL"
+        #selection_key: "resname GOL or resname TRG or resname TAS or resname GLB"
         water_resname: "resname TIP3"
         grid_spacing: 1.0
+aside:
   # include every atom in system in potential (not just water)
   electrostatic_map_options:
     uptype: simulation
@@ -88,10 +82,73 @@ aside:
       average_frames: 'n'
       name_modifier: 'mol'
       nthreads: 15
+      first_frame: 72
+      last_frame: 77
       selector:
         selection_key: "resname GOL"
         water_resname: "resname TIP3"
         grid_spacing: 1.0
+# GRID METHOD
+  electrostatic_map:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      verbose: 3
+      average_frames: 'n'
+      name_modifier: 'correct'
+      nthreads: 15
+      first_frame: 0
+      last_frame: 100
+      selector:
+        grid_method: 'y'
+        water_resname: "resname TIP3"
+        grid_spacing: 7.0
+# SHELL METHOD
+  electrostatic_map_shell:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      verbose: 3
+      average_frames: 'y'
+      name_modifier: 'shell'
+      nthreads: 15
+      first_frame: 0
+      last_frame: 50
+      selector:
+        grid_method: 'n'
+        shell_method: 'y'
+        shell_min: 45
+        shell_max: 50
+        shell_step: 1
+        water_resname: "resname TIP3"
+        selection_key: "resname TRG"
+        grid_spacing: 1.0
+  # calculates electrostatic potential instead of LREP
+  electrostatic_map:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      verbose: 3
+      average_frames: 'n'
+      name_modifier: 'FULL_POTENTIAL'
+      nthreads: 15
+      selector:
+        grid_method: 'n'
+        water_resname: "resname TIP3"
+        selection_key: "resname GOL"
+        LREP_off: 'y'
+        grid_spacing: 1.0
+        first_frame: 1
+        last_frame: 50
 variables:
   #---protected
   art_director: art_ocean.py
