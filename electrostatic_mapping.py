@@ -95,7 +95,7 @@ def extract_traj_info(PSF,DCD,selection_key):
         return [nframes,positions,water_pos]
 
 #--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
-def compute_LREP(ii_coor,water_coor):
+def compute_potential(ii_coor,water_coor):
 	"""
 	This function cycles through *every* interface point, and calls the function that calculates the long-range
 	electrostatic potential at each of those points.
@@ -104,17 +104,19 @@ def compute_LREP(ii_coor,water_coor):
 	global chg
 	global sigma
 	global water_names
+	global potential
 
 	sigma = 4.5
 	npro = n_heavy_atoms
 	nconf = 1.0
-
 	water_charge = {"OH2":-0.834, "H1":0.417, "H2":0.417}
-
 	II = len(ii_coor)
 	VRS = np.zeros(II)
 	SI_unit_conv = 1.084E8*1.602E-19*1E12 				# pV
 	n_water = water_coor.shape[0]
+
+	def _LREP(wc,r): return water_charge[wn]*CW_interface.erf(r/sigma)/r 
+	def _EP(wc,r): return water_charge[wn]/r 
 
 	for ii in range(II):
 		print ii, "of", II
@@ -128,6 +130,10 @@ def compute_LREP(ii_coor,water_coor):
 			rvec = [rvec[i] - wrap2[i]*pbc[i] for i in range(3)]
 			r = np.sqrt(np.dot(rvec,rvec))
 			vrs += water_charge[wn] * CW_interface.erf(r/sigma) / (r)
+			if potential == 'LREP':
+				vrs += _LREP(water_charge[wn],r)
+			else:
+				vrs += _EP(water_charge[wn],r)
 		VRS[ii] = vrs*SI_unit_conv
 	return VRS 
 
@@ -150,7 +156,7 @@ def compute_av_emaps(fr):
 
 	#--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	LREP = compute_LREP(first_II_coors,water_coor)
+	LREP = compute_potential(first_II_coors,water_coor)
 	LREP_stop = time.time()
 	if verbose >= 2:
 		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
@@ -239,7 +245,7 @@ def run_emaps(fr):
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
 	LREP_start = time.time()
-	LREP = compute_LREP(interface_coors,water_coor)
+	LREP = compute_potential(interface_coors,water_coor)
 	LREP_stop = time.time()
 	if verbose >= 2:
 		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
@@ -267,7 +273,7 @@ def electrostatic_mapping(grofile,trajfile,**kwargs):
 	global nthreads
 	global first_frame
 	global last_frame
-
+	global potential
 
 	if 'grid_method' in kwargs['calc']['specs']['selector']:
 		grid_method = kwargs['calc']['specs']['selector']['grid_method']
@@ -298,6 +304,12 @@ def electrostatic_mapping(grofile,trajfile,**kwargs):
 	if 'average_frames' in kwargs['calc']['specs']:
 		av_LREP = kwargs['calc']['specs']['average_frames']
 	else: av_LREP = 'n'
+
+	if 'potential' in kwargs['calc']['specs']:
+		potential = kwargs['calc']['specs']['potential']
+	else: 
+		print "Since no potential was specified, the long range electrostatic potential will be used by default."
+		potential = 'LREP'
 
 	if 'water_resname' in kwargs['calc']['specs']['selector']:
 		water_resname = kwargs['calc']['specs']['selector']['water_resname']

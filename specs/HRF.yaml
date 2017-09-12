@@ -1,11 +1,11 @@
 collections:
   all:
     #- GOL
-    #- TRG
+    - TRG
     #- TAS
     #- GLB
-    - bulk_GOL
-    - bulk_TRG_GOL
+    #- bulk_GOL
+    #- bulk_TRG_GOL
 slices:
   GOL:
     readymade_namd:
@@ -60,12 +60,13 @@ calculations:
       writepdb: 'y'
       verbose: 3
       average_frames: 'n'
-      name_modifier: 'fixed'
+      name_modifier: 'EP'
+      potential: 'LREP'
       nthreads: 15
       first_frame: 0
-      last_frame: 100
+      last_frame: 1
       selector:
-        selection_key: "resname GOL"
+        selection_key: "resname TRG"
         #selection_key: "resname GOL or resname TRG or resname TAS or resname GLB"
         water_resname: "resname TIP3"
         grid_spacing: 1.0
@@ -85,7 +86,7 @@ aside:
       first_frame: 72
       last_frame: 77
       selector:
-        selection_key: "resname GOL"
+        selection_key: "resname TRG"
         water_resname: "resname TIP3"
         grid_spacing: 1.0
 # GRID METHOD
