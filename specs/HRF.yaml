@@ -62,7 +62,7 @@ calculations:
       average_frames: 'n'
       name_modifier: 'CW-test'
       potential: 'LREP'
-      interface_only: 'y'
+      interface_only: 'n'
       nthreads: 15
       first_frame: 0
       last_frame: 1

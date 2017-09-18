@@ -129,7 +129,25 @@ calculations:
               - 2.5
               - 1.0
         curvature_sum: mean
-  electrostatic_map:
+  electrostatic_mapping:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      writepdb: 'y'
+      verbose: 1
+      average_frames: 'n'
+      name_modifier: ''
+      potential: 'LREP'
+      interface_only: 'n'
+      nthreads: 15
+      selector:
+        selection_key: "resname POPC or resname DOPC or resname DOPS or resname PIP2"
+        water_resname: "resname TIP3"
+        grid_spacing: 1.0
+aside:
+  electrostatic_map: #old
     uptype: simulation
     slice_name: current
     group: all
