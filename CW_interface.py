@@ -60,7 +60,7 @@ def compute_coarse_grain_density(pos,dL,pbc,n_heavy_atoms):
 
 	nconf = 1							# number of conformations to consider
 	rho_pro = 0.05							# bulk density of protein
-	cutoff = 7 							# cutoff for Gaussian (for convolution)
+	cutoff = 6
 	dl = 0.1							# grid spacing for coarse grain density
 	npoints = int(cutoff/dl)+1					# number of density points
 	sigp = 2.4 							# width of Gaussian smoothing: protein

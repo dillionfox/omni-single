@@ -94,6 +94,13 @@ def extract_traj_info(PSF,DCD,selection_key):
         pbc = uni.dimensions[0:3]					# retrieve periodic bounds
         return [nframes,positions,water_pos]
 
+def shift_back(interface_coors,fr):
+	global box_shift
+	shift = np.zeros((interface_coors.shape))
+	for i in range(interface_coors.shape[0]):
+		shift[i] = [interface_coors[i][j]-box_shift[fr][j] for j in range(3)]
+	return shift
+
 #--- FUNCTION FOR COMPUTING LONG RANGE ELECTROSTATIC POTENTIAL
 def compute_potential(ii_coor,water_coor):
 	"""
@@ -209,6 +216,7 @@ def run_av_emaps():
 	for el in all_LREPs:
 		av_LREP += el
 	av_LREP/=nframes
+	interface_coors = shift_back(interface_coors,0)
 	write_pdb(first_II_coors,av_LREP,'av')
 	return [0]
 
@@ -222,6 +230,7 @@ def run_emaps(fr):
 	global positions
 	global water
 	global nframes
+	global interface_only
 
 	#--- EXTRACT INFO FOR FRAME, FR
 	if verbose >= 3:
@@ -242,14 +251,21 @@ def run_emaps(fr):
 	marching_cubes_stop = time.time()
 	if verbose >= 2:
 		print 'elapsed time to run marching cubes:', marching_cubes_stop-marching_cubes_start
+
+	if interface_only == 'y':
+		beta = np.zeros(interface_coors.shape[0])
+		interface_coors = shift_back(interface_coors,fr)
+		write_pdb(interface_coors,beta,fr)
 	
 	##--- COMPUTE LONG RANGE ELECTROSTATIC POTENTIAL
-	LREP_start = time.time()
-	LREP = compute_potential(interface_coors,water_coor)
-	LREP_stop = time.time()
-	if verbose >= 2:
-		print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
-	write_pdb(interface_coors,LREP,fr)
+	if interface_only != 'y':
+		LREP_start = time.time()
+		LREP = compute_potential(interface_coors,water_coor)
+		LREP_stop = time.time()
+		if verbose >= 2:
+			print 'potential calculation completed. time elapsed:', LREP_stop-LREP_start
+		interface_coors = shift_back(interface_coors,fr)
+		write_pdb(interface_coors,LREP,fr)
 	return 0
 
 def electrostatic_mapping(grofile,trajfile,**kwargs):
@@ -274,6 +290,7 @@ def electrostatic_mapping(grofile,trajfile,**kwargs):
 	global first_frame
 	global last_frame
 	global potential
+	global interface_only
 
 	if 'grid_method' in kwargs['calc']['specs']['selector']:
 		grid_method = kwargs['calc']['specs']['selector']['grid_method']
@@ -304,6 +321,10 @@ def electrostatic_mapping(grofile,trajfile,**kwargs):
 	if 'average_frames' in kwargs['calc']['specs']:
 		av_LREP = kwargs['calc']['specs']['average_frames']
 	else: av_LREP = 'n'
+
+	if 'interface_only' in kwargs['calc']['specs']:
+		interface_only = kwargs['calc']['specs']['interface_only']
+	else: interface_only = 'n'
 
 	if 'potential' in kwargs['calc']['specs']:
 		potential = kwargs['calc']['specs']['potential']

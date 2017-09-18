@@ -60,8 +60,9 @@ calculations:
       writepdb: 'y'
       verbose: 3
       average_frames: 'n'
-      name_modifier: 'EP'
+      name_modifier: 'CW-test'
       potential: 'LREP'
+      interface_only: 'y'
       nthreads: 15
       first_frame: 0
       last_frame: 1
