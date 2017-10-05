@@ -8,19 +8,19 @@ collections:
     - CL160ENS-2
     - CL160ENS-3
 
-# where are the inputs (REQUIRED)
+# pointers to the data (REQUIRED)
 slices:
   CL160ENS-2:
     readymade_meso_v1:
       current:
-        path: /store-iota/MASTER/Samrad/Mem_Undulation
+        path: +paths/mem_undulation
         directory: CL160ENS-2
         membrane_xyz_glob: memb_xyz-0-0-*.xyz
         nanogel_dat: NG_Position-0_Frame-0.dat
   CL160ENS-3:
     readymade_meso_v1:
       current:
-        path: /store-iota/MASTER/Samrad/Mem_Undulation
+        path: +paths/mem_undulation
         directory: CL160ENS-3
         membrane_xyz_glob: memb_xyz-0-0-*.xyz
         nanogel_dat: NG_Position-0_Frame-0.dat
@@ -31,7 +31,9 @@ meta:
   bound_membrane_cl0: {}
 
 # avoid repetition inside this YAML file (OPTIONAL)
-variables: {}
+variables:
+  paths:
+    mem_undulation: /store-iota/MASTER/Samrad/Mem_Undulation
 
 # which calculations to perform (REQUIRED) via `make compute`
 calculations:
@@ -52,6 +54,14 @@ calculations:
     collections: all
     specs:
       mapping_style: single_inducer 
+  undulations_average_normal:
+    uptype: post
+    group: all
+    slice_name: current
+    collections: all
+    specs:
+      upstream: 
+        import_readymade_meso_v1_membrane: {}
   # gently-modified version of the curvature_undulation_coupling calculation which
   # ...substitutes the MD inputs for the mesoscale inputs specific to this project
   curvature_undulation_coupling_dex:
@@ -79,16 +89,28 @@ calculations:
               method: fixed_isotropic
               extent: 20.0
             curvature_sum: mean
-          v4:
-            style: wilderness
-            curvature_positions: 
-              method: neighborhood
-              distance_cutoff: 100.0
-              spacer: 40.0
-            extents:
-              method: fixed_isotropic
-              extent: 20.0
-            curvature_sum: mean
+          #v4:
+          #  style: wilderness
+          #  curvature_positions: 
+          #    method: neighborhood
+          #    distance_cutoff: 100.0
+          #    spacer: 40.0
+          #  extents:
+          #    method: fixed_isotropic
+          #    extent: 20.0
+          #  curvature_sum: mean
+          # added midplane method here
+          #v5:
+          #  style: wilderness
+          #  curvature_positions: 
+          #    method: neighborhood
+          #    distance_cutoff: 50.0
+          #    spacer: 40.0
+          #  extents:
+          #    method: fixed_isotropic
+          #    extent: 20.0
+          #  curvature_sum: mean
+          #  midplane_method: average
   # duplicate of the pixel method for dextran
   curvature_undulation_coupling_pixel_dex:
     uptype: post
@@ -130,26 +152,35 @@ calculations:
               method: fixed_isotropic
               extent: 50.0
             curvature_sum: mean
-          v13:
-            style: wilderness
-            curvature_positions: 
-              method: pixel
-              spacer: 80.0
-            extents:
-              method: fixed_isotropic
-              extent: 40.0
-            curvature_sum: mean
-          v14:
-            style: wilderness
-            curvature_positions: 
-              method: pixel
-              spacer: 60.0
-            extents:
-              method: fixed_isotropic
-              extent: 30.0
-            curvature_sum: mean
+          #v13:
+          #  style: wilderness
+          #  curvature_positions: 
+          #    method: pixel
+          #    spacer: 80.0
+          #  extents:
+          #    method: fixed_isotropic
+          #    extent: 40.0
+          #  curvature_sum: mean
+          #v14:
+          #  style: wilderness
+          #  curvature_positions: 
+          #    method: pixel
+          #    spacer: 60.0
+          #  extents:
+          #    method: fixed_isotropic
+          #    extent: 30.0
+          #  curvature_sum: mean
+          #v15:
+          #  style: wilderness
+          #  curvature_positions: 
+          #    method: pixel
+          #    spacer: 50.0
+          #  extents:
+          #    method: fixed_isotropic
+          #    extent: 25.0
+          #  curvature_sum: mean
 
-# which data to load for plotting (REQUIRED, but optional if you use the same exact name as the calculation)
+# which data to load for plotting (REQUIRED unless you use the same exact name as the calculation)
 plots:
   # read the membrane interpolation and compute undulation spectra
   undulations:
@@ -159,10 +190,26 @@ plots:
     specs: 
       routine:
         - spectra
-        - height
-        - height_histograms
+        #- height
+        #- height_histograms
         #- debug3d
       show_fit: False
+      midplane_method: average_normal
+      wavevector_limits: [0.2,0.3,1.0]
+  undulations_legacy:
+    # remove this when it becomes unnecessary!
+    collections: all
+    calculation:
+      import_readymade_meso_v1_membrane: {}
+    specs: 
+      routine:
+        - spectra
+        #- height
+        #- height_histograms
+        #- debug3d
+      show_fit: False
+      midplane_method: average_normal
+      wavevector_limits: [0.2,0.3,1.0]
   # point our custom calculation to the right plot function
   curvature_undulation_coupling:
     calculation: 
@@ -200,3 +247,6 @@ plots:
       curvature_undulation_coupling_dex:
         design: v1
     collections: all
+  mesh-improve:
+    calculation:
+      import_readymade_meso_v1_membrane: {}

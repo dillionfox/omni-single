@@ -9,11 +9,38 @@ import numpy as np
 #---block: what to plot
 routine = ['plt'][-1:]
 
-def make_map(x):
+def make_map(data):
 
+	def average_set(curr_list):
+	        hist=[]
+	        unique_list=sorted(set(curr_list))
+	        for el in unique_list:
+	                occ=curr_list.count(el)
+	                if occ > cutoff:
+	                        hist.append(el-9230)
+	return hist
+	
 	sequence=['w','m','d','n','p','e','r','y','m','d','m','s','g','y','q','m','d','m','q','g','r','w',\
 	'm','d','a','q','g','r','f','n','n','p','f','g','q','m','w','h','g','r','q','g','h','y','p',\
 	'g','y','m','s','s','h','s','m','y','g','r','n','m','y','n','p']
+
+	res_per_frame = []	
+	seq = []
+	curr_list = []
+	frame_bin = []
+	fr_count = 0
+	for frame in data:
+		residues = np.where(frame!=0)
+	        for r in residues:
+			curr_list.append(res)
+	        if fr_count%10==0:
+	                hist=average_set(curr_list)
+	                for i in range(len(hist)):
+	                        frame_bin.append(fr_count)
+	                        seq.append(hist[i])
+	                res_per_frame.append(len(hist))
+	                curr_list=[]
+	        fr_count+=1
 
 	fig=plt.figure(1)
 	ax=fig.add_subplot(111)
