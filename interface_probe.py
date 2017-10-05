@@ -16,8 +16,6 @@ def probe(fr):
 	global DCD
 	global probe_radius
 	global resids_per_frame
-	global water_bound_min
-        global water_bound_max
 	global interface_vector
 	global edge_padding
 	global vec_to_int
@@ -28,6 +26,16 @@ def probe(fr):
 	resids = np.zeros(nres)
 	uni = MDAnalysis.Universe(PSF,DCD)
 	uni.trajectory[fr]
+	lipids = uni.select_atoms('resname POPC')
+	if len(lipids) > 0:		
+		lipid_av = lipids.positions[:,vec_to_int[interface_vector]].mean(axis=0)
+		sel = uni.select_atoms('all')
+		sel.atoms.translate([0,0,-lipid_av]) # ONLY WORKS FOR Z DIRECTION!!!!
+		sel.pack_into_box()
+		#sel.write("test_pack.pdb")
+	water_bound_min = uni.select_atoms('resname TIP3').positions[:,vec_to_int[interface_vector]].min()
+	water_bound_max = uni.select_atoms('resname TIP3').positions[:,vec_to_int[interface_vector]].max()
+
 	protein = uni.select_atoms('global protein and ((prop '+ str(interface_vector) + ' < '+ str(water_bound_min+edge_padding) + ') or (prop ' + str(interface_vector) + ' > '+ str(water_bound_max-edge_padding) + '))')
 	# if protein is closer to left edge, then we are looking for things that are more negative 
 	protein_av = protein.positions[:,vec_to_int[interface_vector]].mean(axis=0)
@@ -39,20 +47,20 @@ def probe(fr):
 	for i in protein.indices:
 		p = uni.select_atoms('bynum ' + str(i))
 		pc = p.positions.mean(axis=0)
-		# example where protein atom is at (-19, 20,10)
-		# water and x < -19 
 		iv = interface_vector # shorter name
 		dl = probe_radius # shorter name
 		v0 = vec_to_int[iv]; v1 = (v0+1)%3; v2 = (v0+2)%3
 		iv1 = int_to_vec[v1]; iv2 = int_to_vec[v2]
 			#    water        and        x        <        -19
-		selstring = 'resname TIP3 and prop '+str(iv)+ineq+str(pc[v0])
+		selstring = 'resname TIP3 and (prop '+str(iv)+ineq+str(pc[v0])
 		selstring += ' and prop ' + str(iv1) + ' > ' + str(pc[v1]-dl) 
 		selstring += ' and prop ' + str(iv1) + ' < ' + str(pc[v1]+dl) 
 		selstring += ' and prop ' + str(iv2) + ' > ' + str(pc[v2]-dl) 
 		selstring += ' and prop ' + str(iv2) + ' < ' + str(pc[v2]+dl) 
+		selstring += ')'
 		water_sel = uni.select_atoms(selstring)
 		if len(water_sel) == 0:
+			print "woo hoo!!!", p.residues.resids
 			resids[p.residues.resids-1] = 1
 		
 	return resids 
@@ -75,6 +83,7 @@ def interface_probe(grofile,trajfile,**kwargs):
 	global vec_to_int
 	global int_to_vec
 	global nres
+	global lipid_av
 
 	if 'probe_radius' in kwargs['calc']['specs']:
 		probe_radius = kwargs['calc']['specs']['probe_radius']
@@ -83,7 +92,7 @@ def interface_probe(grofile,trajfile,**kwargs):
 		probe_radius = 2.0
 
 	if 'interface_vector' in kwargs['calc']['specs']:
-		first_frame = kwargs['calc']['specs']['interface_vector']
+		interface_vector = kwargs['calc']['specs']['interface_vector']
 	else: 
 		print "need to specify interface vector. Exiting"
 		exit()
@@ -121,14 +130,12 @@ def interface_probe(grofile,trajfile,**kwargs):
 	vec_to_int = {'x':0, 'y':1, 'z':2}
 	int_to_vec = {0:'x', 1:'y', 2:'z'}
 
-	interface_vector = 'x'
 	edge_padding = 10
 
 	protein = uni.select_atoms('protein')
 	nres = len(protein.residues)
+	first_resid = protein.residues.resids[0]
 	resids_per_frame = np.zeros((nframes,nres))
-	water_bound_min = uni.select_atoms('resname TIP3').positions[:,vec_to_int[interface_vector]].min()
-	water_bound_max = uni.select_atoms('resname TIP3').positions[:,vec_to_int[interface_vector]].max()
 	uni = []
 
 	contact_frames = np.zeros(nframes)

@@ -1,13 +1,16 @@
 collections:
   all:
-    - mk002
+    - mk001
+    #- mk002
     #- mk003
     #- mk004
     #- mk005
 slices:
   mk001:
     readymade_namd:
-      current: +slices/mk001
+      current:
+        psf: "smaller_membrane.pdb"
+        dcds: ['smaller_membrane_717.dcd']
   mk002:
     readymade_namd:
       current:
@@ -29,6 +32,18 @@ slices:
         psf: "1protein_again_autopsf.pdb"
         dcds: ['BMEM_sample.dcd']
 calculations:
+  interface_probe:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      probe_radius: 4.0
+      interface_vector: 'z'
+      nthreads: 8
+      first_frame: 0
+      last_frame: 750
+aside:
   protein_abstractor:
     uptype: simulation
     slice_name: current
@@ -194,6 +209,11 @@ meta:
     label: "34 frames"
     nprots: 1
 plots:
+  interface_probe:
+    calculation: interface_probe
+    slices: current
+    collections:
+      - all
   undulations:
     calculation: 
       undulations:

@@ -13,7 +13,7 @@ def make_map(dat):
 	from matplotlib.ticker import MultipleLocator
 
 	def average_set(curr_list):
-		cutoff = 5
+		cutoff = 1
 	        hist=[]
 	        unique_list=sorted(set(curr_list))
 	        for el in unique_list:
@@ -74,9 +74,10 @@ def make_map(dat):
 	##plt.imshow(x,cmap='Greys')
 	#plt.scatter(frame_bin,seq,s=30,marker='o',lw=0.0)
 	#plt.grid(lineStyle=':')
-	picturesave('fig.%s'%('interface_probe_time'),work.plotdir,backup=False,version=True,meta={})
+	picturesave('fig.%s'%('interface_probe_time.'+str(sn)),work.plotdir,backup=False,version=True,meta={},form='pdf')
 
 def make_hist(x):
+	global sn
 	sequence=['w','m','d','n','p','e','r','y','m','d','m','s','g','y','q','m','d','m','q','g','r','w',\
 	'm','d','a','q','g','r','f','n','n','p','f','g','q','m','w','h','g','r','q','g','h','y','p',\
 	'g','y','m','s','s','h','s','m','y','g','r','n','m','y','n','p']
@@ -100,7 +101,7 @@ def make_hist(x):
 
 	plt.bar(np.arange(m),hist,width=1,edgecolor='k')
 	plt.xlim(-1,len(sequence))
-	picturesave('fig.%s'%('interface_probe_histogram'),work.plotdir,backup=False,version=True,meta={})
+	picturesave('fig.%s'%('interface_probe_histogram.'+str(sn)),work.plotdir,backup=False,version=True,meta={},form='pdf')
 
 #---block: load the calculation data
 if 'data' not in globals(): 
@@ -110,7 +111,8 @@ if 'data' not in globals():
 if 'plt' in routine:
 
 	#---settings
-	sn = 'sim1'
+	global sn
+	sn = 'mk001'
 	protein_lipid_contacts = data[sn]['data']
 	resids_per_frame = np.transpose(protein_lipid_contacts['resids_per_frames'])
 	make_map(resids_per_frame)
