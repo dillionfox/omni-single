@@ -1,0 +1,72 @@
+collections:
+  all:
+    - sim1
+slices:
+  sim1:
+    readymade_namd:
+      current:
+        psf: "s_0000_autogen_i.psf"
+        dcds: ['water-vapor_all.dcd']
+calculations:
+  #protein_lipid_contacts:
+  #  uptype: simulation
+  #  slice_name: current
+  #  group: all
+  #  collections: all
+  #  specs:
+  #    selector:
+  #      distance_cutoff: 2.0
+  #      vapor: 'y'
+  interface_probe:
+    uptype: simulation
+    slice_name: current
+    group: all
+    collections: all
+    specs:
+      probe_radius: 4.0
+      interface_vector: 'x'
+      nthreads: 8
+      first_frame: 0
+      last_frame: 1200
+  #electrostatic_mapping:
+  #  uptype: simulation
+  #  slice_name: current
+  #  group: all
+  #  collections: all
+  #  specs:
+  #    writepdb: 'y'
+  #    verbose: 3
+  #    average_frames: 'n'
+  #    name_modifier: ''
+  #    potential: 'LREP'
+  #    interface_only: 'y'
+  #    nthreads: 15
+  #    selector:
+  #      selection_key: "resname TIP3"
+  #      water_resname: "resname TIP3"
+  #      grid_spacing: 1.0
+variables:
+  #---protected
+  art_director: art_ocean.py
+  #---unprotected
+  selectors:
+    protein_selection: (name BB or name SC1 or name SC2 or name SC3 or name SC4 or name SC5)
+    resnames_lipid: ['DOPC','DOPS','PIP2','POPC']
+  slices:
+    mk001:
+        psf: "1protein_again_autopsf.psf"
+        dcds: ['test0000.dcd','test0001.dcd','test0002.dcd','test0003.dcd','test0004.dcd']
+    mk002:
+        psf: "1protein_again_autopsf-v2.psf"
+        dcds: ['test0000-v2.dcd','test0001-v2.dcd','test0002-v2.dcd','test0003-v2.dcd','test0004-v2.dcd']
+meta:
+  short_namer: "lambda s, spot : ('v'+re.match('^simulation-v(\\d+)',s).group(1) if re.match('^simulation-v(\\d+)',s) else s)"
+  sim1: 
+    label: "v1"
+    nprots: 1
+plots:
+  interface_probe:
+    calculation: interface_probe
+    slices: current
+    collections:
+      - all
