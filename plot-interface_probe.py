@@ -13,7 +13,7 @@ def make_map(dat):
 	from matplotlib.ticker import MultipleLocator
 
 	def average_set(curr_list):
-		cutoff = 1
+		cutoff = 5
 	        hist=[]
 	        unique_list=sorted(set(curr_list))
 	        for el in unique_list:
@@ -59,8 +59,8 @@ def make_map(dat):
         plot.set_ylabel('Residue',size=fontSize)
         plot.set_yticks(np.arange(0,len(sequence)))
         plot.set_yticklabels(sequence,fontSize=fontSize)
-        #plt.ylim(26.5,34.5)   
-        #plt.xlim(185,1215)
+        plt.ylim(26.5,35.5)   
+        plt.xlim(0,900)
 
 	#fig=plt.figure(1)
 	#ax=fig.add_subplot(111)
@@ -75,6 +75,38 @@ def make_map(dat):
 	#plt.scatter(frame_bin,seq,s=30,marker='o',lw=0.0)
 	#plt.grid(lineStyle=':')
 	picturesave('fig.%s'%('interface_probe_time.'+str(sn)),work.plotdir,backup=False,version=True,meta={},form='pdf')
+
+def make_hist_by_restype(x):
+	global sn
+	sequence=['w','m','d','n','p','e','r','y','m','d','m','s','g','y','q','m','d','m','q','g','r','w',\
+	'm','d','a','q','g','r','f','n','n','p','f','g','q','m','w','h','g','r','q','g','h','y','p',\
+	'g','y','m','s','s','h','s','m','y','g','r','n','m','y','n','p']
+	restypes = set(sequence)
+
+	hist = np.zeros(len(restypes))
+	resnum = 0
+	for i in x:
+		resname = sequence[resnum]
+		list_index = list(restypes).index(resname)
+		hist[list_index]+=sum(i)/sequence.count(resname)
+		print resname, sequence.count(resname)
+		resnum+=1
+	print hist
+
+	hist, restypes = (list(t) for t in zip(*sorted(zip(hist, restypes),reverse=True)))
+
+	fig=plt.figure(1)
+	ax=fig.add_subplot(111)
+	fig.suptitle('Residue/Lipid Contacts')
+	ax.set_xlabel('Residue')
+	ax.set_ylabel('Number of Occurrences')
+
+	ax.set_xticks(np.arange(len(restypes)))
+	ax.set_xticklabels(restypes,fontSize=5)
+
+	plt.bar(np.arange(len(restypes)),hist,width=1,edgecolor='k')
+	plt.xlim(-1,len(restypes))
+	picturesave('fig.%s'%('interface_probe_histogram_restype.'+str(sn)),work.plotdir,backup=False,version=True,meta={},form='pdf')
 
 def make_hist(x):
 	global sn
@@ -115,6 +147,7 @@ if 'plt' in routine:
 	sn = 'mk001'
 	protein_lipid_contacts = data[sn]['data']
 	resids_per_frame = np.transpose(protein_lipid_contacts['resids_per_frames'])
-	make_map(resids_per_frame)
-	make_hist(resids_per_frame)
+	#make_map(resids_per_frame)
+	#make_hist(resids_per_frame)
+	make_hist_by_restype(resids_per_frame)
 
