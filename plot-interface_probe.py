@@ -144,10 +144,11 @@ if 'plt' in routine:
 
 	#---settings
 	global sn
-	sn = 'mk001'
-	protein_lipid_contacts = data[sn]['data']
-	resids_per_frame = np.transpose(protein_lipid_contacts['resids_per_frames'])
-	#make_map(resids_per_frame)
-	#make_hist(resids_per_frame)
-	make_hist_by_restype(resids_per_frame)
+	sn = 'v1'
+	for sn in ['v1','v2','v3','v8','v9']:
+		protein_lipid_contacts = data[sn]['data']
+		resids_per_frame = np.transpose(protein_lipid_contacts['resids_per_frames'])
+		make_map(resids_per_frame)
+		make_hist(resids_per_frame)
+		make_hist_by_restype(resids_per_frame)
 
